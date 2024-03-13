@@ -16,8 +16,3 @@ query I
 SELECT deltatable('Sam');
 ----
 Deltatable Sam 🐥
-
-query I
-SELECT deltatable_openssl_version('Michael');
-----
-<REGEX>:Deltatable Michael, my linked OpenSSL version is OpenSSL.*

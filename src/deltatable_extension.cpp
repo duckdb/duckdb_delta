@@ -8,9 +8,6 @@
 #include "duckdb/main/extension_util.hpp"
 #include <duckdb/parser/parsed_data/create_scalar_function_info.hpp>
 
-// OpenSSL linked through vcpkg
-#include <openssl/opensslv.h>
-
 namespace duckdb {
 
 inline void DeltatableScalarFun(DataChunk &args, ExpressionState &state, Vector &result) {
@@ -22,26 +19,10 @@ inline void DeltatableScalarFun(DataChunk &args, ExpressionState &state, Vector 
         });
 }
 
-inline void DeltatableOpenSSLVersionScalarFun(DataChunk &args, ExpressionState &state, Vector &result) {
-    auto &name_vector = args.data[0];
-    UnaryExecutor::Execute<string_t, string_t>(
-	    name_vector, result, args.size(),
-	    [&](string_t name) {
-			return StringVector::AddString(result, "Deltatable " + name.GetString() +
-                                                     ", my linked OpenSSL version is " +
-                                                     OPENSSL_VERSION_TEXT );;
-        });
-}
-
 static void LoadInternal(DatabaseInstance &instance) {
     // Register a scalar function
     auto deltatable_scalar_function = ScalarFunction("deltatable", {LogicalType::VARCHAR}, LogicalType::VARCHAR, DeltatableScalarFun);
     ExtensionUtil::RegisterFunction(instance, deltatable_scalar_function);
-
-    // Register another scalar function
-    auto deltatable_openssl_version_scalar_function = ScalarFunction("deltatable_openssl_version", {LogicalType::VARCHAR},
-                                                LogicalType::VARCHAR, DeltatableOpenSSLVersionScalarFun);
-    ExtensionUtil::RegisterFunction(instance, deltatable_openssl_version_scalar_function);
 }
 
 void DeltatableExtension::Load(DuckDB &db) {
