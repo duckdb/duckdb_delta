@@ -1,0 +1,23 @@
+# name: test/sql/deltatable.test
+# description: test deltatable extension
+# group: [deltatable]
+
+# Before we load the extension, this will fail
+statement error
+SELECT deltatable('Sam');
+----
+Catalog Error: Scalar Function with name deltatable does not exist!
+
+# Require statement will ensure this test is run with this extension loaded
+require deltatable
+
+# Confirm the extension works
+query I
+SELECT deltatable('Sam');
+----
+Deltatable Sam 🐥
+
+query I
+SELECT deltatable_openssl_version('Michael');
+----
+<REGEX>:Deltatable Michael, my linked OpenSSL version is OpenSSL.*
