@@ -8,6 +8,10 @@ require-env GENERATED_DATA_AVAILABLE
 
 mode output_result
 
-statement ok
-from delta_scan('data/generated/lineitem_sf0_01') limit 10
+# This one is ok
+#statement ok
+#from delta_scan('delta-kernel-rs/kernel/tests/data/table-with-dv-small');
 
+# But this one is not; likely due to some unsupported type in metadata?
+statement ok
+from delta_scan('data/generated/lineitem_sf0_01/delta_lake') limit 10

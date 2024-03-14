@@ -130,12 +130,18 @@ ffi::KernelStringSlice str_slice(const string &str) {
       return {str.data(), str.size()};
 }
 
-ffi::EngineError* allocator_error_fun(ffi::KernelError etype, ffi::KernelStringSlice msg) {
-      printf("Error thingy: %s", string(msg.ptr, msg.len).c_str());
-      return nullptr;
+struct DuckDBEngineError : ffi::EngineError {
+    string error_message;
 };
 
-// TODO don't hardcode this
+ffi::EngineError* error_allocator(ffi::KernelError etype, ffi::KernelStringSlice msg) {
+    auto error = new DuckDBEngineError;
+    error->etype = etype;
+    error->error_message = string(msg.ptr, msg.len);
+    return error;
+};
+
+// TODO make less hacky
 static const char* KernelErrorEnumStrings[] = {
         "UnknownError",
         "FFIError",
@@ -160,16 +166,36 @@ static string kernel_error_to_string(ffi::KernelError err) {
     return KernelErrorEnumStrings[(int)err];
 }
 
+// TODO: not unpacking an ExternResult with an error will now lead to memory leak
 template <class T>
 static T unpack_result_or_throw(ffi::ExternResult<T> result, const string &from_where) {
     if (result.tag == ffi::ExternResult<T>::Tag::Err) {
         if (result.err._0){
-            throw InternalException("Hit DeltaKernel FFI error (from: %s): Hit error: %u (%s)", from_where.c_str(), result.err._0->etype, kernel_error_to_string(result.err._0->etype));
+            auto error_cast = static_cast<DuckDBEngineError*>(result.err._0);
+            auto etype = error_cast->etype;
+            auto message = error_cast->error_message;
+            free(error_cast);
+
+            throw InternalException("Hit DeltaKernel FFI error (from: %s): Hit error: %u (%s) with message (%s)",
+                                    from_where.c_str(), etype, kernel_error_to_string(etype), message);
         } else {
             throw InternalException("Hit DeltaKernel FFI error (from: %s): Hit error, but error was nullptr", from_where.c_str());
         }
+    } else if (result.tag == ffi::ExternResult<T>::Tag::Ok) {
+        return result.ok._0;
     }
-    return result.ok._0;
+    throw InternalException("Invalid error ExternResult tag found!");
 }
+
+template <class T>
+bool result_is_ok(ffi::ExternResult<T> result) {
+    if (result.tag == ffi::ExternResult<T>::Tag::Ok) {
+        return true;
+    } else if (result.tag == ffi::ExternResult<T>::Tag::Err) {
+        return false;
+    }
+    throw InternalException("Invalid error ExternResult tag found!");
+}
+
 
 } // namespace duckdb

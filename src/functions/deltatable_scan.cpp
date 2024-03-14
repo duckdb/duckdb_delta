@@ -6,7 +6,6 @@
 
 #include <string>
 #include <numeric>
-#include <iostream>
 
 namespace duckdb {
 
@@ -131,7 +130,7 @@ static unique_ptr<FunctionData> DeltaScanScanBind(ClientContext &context,
 
     auto path_slice = str_slice(result->path);
 
-    auto table_client_res = get_default_client(path_slice, allocator_error_fun);
+    auto table_client_res = get_default_client(path_slice, error_allocator);
     const ffi::ExternTableClientHandle *table_client = unpack_result_or_throw(table_client_res, "get_default_client in DeltaScanScanBind");
 
     auto snapshot_res = snapshot(path_slice, table_client);
