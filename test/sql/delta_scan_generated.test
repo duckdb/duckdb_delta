@@ -1,0 +1,13 @@
+# name: test/sql/deltatable.test
+# description: test deltatable extension
+# group: [deltatable]
+
+require deltatable
+
+require-env GENERATED_DATA_AVAILABLE
+
+mode output_result
+
+statement ok
+from delta_scan('data/generated/lineitem_sf0_01') limit 10
+

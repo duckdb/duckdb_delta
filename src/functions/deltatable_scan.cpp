@@ -112,7 +112,7 @@ static unique_ptr<GlobalTableFunctionState> DeltaScanScanInitGlobal(ClientContex
     auto scan_files_result = ffi::kernel_scan_files_init(bind_data.snapshot, bind_data.table_client, &visitor);
 
     result->files = {
-            scan_files_result.ok._0,
+            unpack_result_or_throw(scan_files_result, "kernel_scan_files_init in InitGlobal"),
             ffi::kernel_scan_files_free,
     };
 
@@ -132,10 +132,10 @@ static unique_ptr<FunctionData> DeltaScanScanBind(ClientContext &context,
     auto path_slice = str_slice(result->path);
 
     auto table_client_res = get_default_client(path_slice, allocator_error_fun);
-    const ffi::ExternTableClientHandle *table_client = table_client_res.ok._0;
+    const ffi::ExternTableClientHandle *table_client = unpack_result_or_throw(table_client_res, "get_default_client in DeltaScanScanBind");
 
     auto snapshot_res = snapshot(path_slice, table_client);
-    const ffi::SnapshotHandle *snapshot = snapshot_res.ok._0;
+    const ffi::SnapshotHandle *snapshot = unpack_result_or_throw(snapshot_res, "snapshot in DeltaScanScanBind");
 
     result->version = ffi::version(snapshot);
 

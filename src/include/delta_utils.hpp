@@ -135,5 +135,41 @@ ffi::EngineError* allocator_error_fun(ffi::KernelError etype, ffi::KernelStringS
       return nullptr;
 };
 
+// TODO don't hardcode this
+static const char* KernelErrorEnumStrings[] = {
+        "UnknownError",
+        "FFIError",
+        "ArrowError",
+        "GenericError",
+        "ParquetError",
+        "ObjectStoreError",
+        "FileNotFoundError",
+        "MissingColumnError",
+        "UnexpectedColumnTypeError",
+        "MissingDataError",
+        "MissingVersionError",
+        "DeletionVectorError",
+        "InvalidUrlError",
+        "MalformedJsonError",
+        "MissingMetadataError"
+};
+static_assert(sizeof(KernelErrorEnumStrings)/sizeof(char*)-1 == (int)ffi::KernelError::MissingMetadataError,
+              "KernelErrorEnumStrings failin");
+
+static string kernel_error_to_string(ffi::KernelError err) {
+    return KernelErrorEnumStrings[(int)err];
+}
+
+template <class T>
+static T unpack_result_or_throw(ffi::ExternResult<T> result, const string &from_where) {
+    if (result.tag == ffi::ExternResult<T>::Tag::Err) {
+        if (result.err._0){
+            throw InternalException("Hit DeltaKernel FFI error (from: %s): Hit error: %u (%s)", from_where.c_str(), result.err._0->etype, kernel_error_to_string(result.err._0->etype));
+        } else {
+            throw InternalException("Hit DeltaKernel FFI error (from: %s): Hit error, but error was nullptr", from_where.c_str());
+        }
+    }
+    return result.ok._0;
+}
 
 } // namespace duckdb
