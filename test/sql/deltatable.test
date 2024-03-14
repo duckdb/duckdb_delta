@@ -2,17 +2,18 @@
 # description: test deltatable extension
 # group: [deltatable]
 
-# Before we load the extension, this will fail
-statement error
-SELECT deltatable('Sam');
-----
-Catalog Error: Scalar Function with name deltatable does not exist!
-
-# Require statement will ensure this test is run with this extension loaded
 require deltatable
 
-# Confirm the extension works
 query I
-SELECT deltatable('Sam');
+SELECT * from delta_scan('delta-kernel-rs/kernel/tests/data/table-with-dv-small')
 ----
-Deltatable Sam 🐥
+0
+1
+2
+3
+4
+5
+6
+7
+8
+9

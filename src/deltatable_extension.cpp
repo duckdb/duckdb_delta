@@ -1,35 +1,29 @@
 #define DUCKDB_EXTENSION_MAIN
 
 #include "deltatable_extension.hpp"
+#include "deltatable_functions.hpp"
+
 #include "duckdb.hpp"
 #include "duckdb/common/exception.hpp"
-#include "duckdb/common/string_util.hpp"
-#include "duckdb/function/scalar_function.hpp"
 #include "duckdb/main/extension_util.hpp"
-#include <duckdb/parser/parsed_data/create_scalar_function_info.hpp>
+
+#include "parquet_reader.hpp"
 
 namespace duckdb {
 
-inline void DeltatableScalarFun(DataChunk &args, ExpressionState &state, Vector &result) {
-    auto &name_vector = args.data[0];
-    UnaryExecutor::Execute<string_t, string_t>(
-	    name_vector, result, args.size(),
-	    [&](string_t name) {
-			return StringVector::AddString(result, "Deltatable "+name.GetString()+" 🐥");;
-        });
-}
-
 static void LoadInternal(DatabaseInstance &instance) {
-    // Register a scalar function
-    auto deltatable_scalar_function = ScalarFunction("deltatable", {LogicalType::VARCHAR}, LogicalType::VARCHAR, DeltatableScalarFun);
-    ExtensionUtil::RegisterFunction(instance, deltatable_scalar_function);
+    // Load functions
+    for (const auto &function : DeltatableFunctions::GetTableFunctions()) {
+        ExtensionUtil::RegisterFunction(instance, function);
+    }
 }
 
 void DeltatableExtension::Load(DuckDB &db) {
-	LoadInternal(*db.instance);
+    LoadInternal(*db.instance);
 }
+
 std::string DeltatableExtension::Name() {
-	return "deltatable";
+    return "deltatable";
 }
 
 } // namespace duckdb
@@ -42,7 +36,7 @@ DUCKDB_EXTENSION_API void deltatable_init(duckdb::DatabaseInstance &db) {
 }
 
 DUCKDB_EXTENSION_API const char *deltatable_version() {
-	return duckdb::DuckDB::LibraryVersion();
+    return duckdb::DuckDB::LibraryVersion();
 }
 }
 
