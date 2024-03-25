@@ -39,12 +39,24 @@ set(KERNEL_NAME delta_kernel)
 # Set default ExternalProject root directory
 set_directory_properties(PROPERTIES EP_PREFIX ${CMAKE_BINARY_DIR}/rust)
 
+# Propagate arch to rust build for CI
+set(RUST_PLATFORM_TARGET "")
+if("${DUCKDB_PLATFORM}" MATCHES "^linux_amd64(_gcc4)?$")
+    set(RUST_PLATFORM_TARGET "--target=x86_64-unknown-linux-gnu")
+elseif("${DUCKDB_PLATFORM}" STREQUAL "linux_arm64")
+    set(RUST_PLATFORM_TARGET "--target=aarch64-unknown-linux-gnu")
+elseif("${DUCKDB_PLATFORM}" STREQUAL "osx_arm64")
+    set(RUST_PLATFORM_TARGET "--target=osx_arm64")
+elseif("${DUCKDB_PLATFORM}" STREQUAL "osx_amd64")
+    set(RUST_PLATFORM_TARGET "--target=osx_amd64")
+endif()
+
 # Add rust_example as a CMake target
 ExternalProject_Add(
         ${KERNEL_NAME}
         DOWNLOAD_COMMAND ""
         CONFIGURE_COMMAND ""
-        BUILD_COMMAND cargo build --package deltakernel-ffi --all-features COMMAND cargo build --release --package deltakernel-ffi --all-features
+        BUILD_COMMAND cargo build --package deltakernel-ffi --all-features ${RUST_PLATFORM_TARGET}
         BINARY_DIR "${CMAKE_SOURCE_DIR}/../delta-kernel-rs"
         BUILD_BYPRODUCTS "${CMAKE_SOURCE_DIR}/../delta-kernel-rs/target/debug/libdeltakernel_ffi.a"
         BUILD_BYPRODUCTS "${CMAKE_SOURCE_DIR}/../delta-kernel-rs/target/release/libdeltakernel_ffi.a"
