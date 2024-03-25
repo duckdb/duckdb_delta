@@ -138,7 +138,6 @@ jobs:
         if: ${{ matrix.duckdb_arch == 'linux_amd64_gcc4' }}
         run: |
           ./duckdb/scripts/setup_manylinux2014.sh general aws-cli ccache ssh python_alias openssl
-          curl --proto '=https' --tlsv1.2 -sSf https://sh.rustup.rs | sh -s -- -y
 
       - name: Setup Rust for cross compile
         if: ${{ matrix.duckdb_arch == 'linux_arm64' }}
@@ -146,9 +145,11 @@ jobs:
         with:
           targets: aarch64-unknown-linux-gnu
 
-      - name: Setup Rust for manylinux
+      - name: Setup Rust for manylinux (dtolnay/rust-toolchain doesn't work due to curl being old here)
         if: ${{ matrix.duckdb_arch == 'linux_amd64_gcc4' }}
-        uses: dtolnay/rust-toolchain@stable
+        run: |
+          curl --proto '=https' --tlsv1.2 -sSf https://sh.rustup.rs | sh -s -- -y
+          . "$HOME/.cargo/env"
 
       - name: Setup Ccache
         uses: hendrikmuhs/ccache-action@v1.2.11 # Note: pinned due to GLIBC incompatibility in later releases
