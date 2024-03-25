@@ -41,14 +41,18 @@ set_directory_properties(PROPERTIES EP_PREFIX ${CMAKE_BINARY_DIR}/rust)
 
 # Propagate arch to rust build for CI
 set(RUST_PLATFORM_TARGET "")
-if("${DUCKDB_PLATFORM}" MATCHES "^linux_amd64(_gcc4)?$")
-    set(RUST_PLATFORM_TARGET "--target=x86_64-unknown-linux-gnu")
-elseif("${DUCKDB_PLATFORM}" STREQUAL "linux_arm64")
-    set(RUST_PLATFORM_TARGET "--target=aarch64-unknown-linux-gnu")
-elseif("${DUCKDB_PLATFORM}" STREQUAL "osx_arm64")
-    set(RUST_PLATFORM_TARGET "--target=osx_arm64")
-elseif("${DUCKDB_PLATFORM}" STREQUAL "osx_amd64")
-    set(RUST_PLATFORM_TARGET "--target=osx_amd64")
+if("${OS_NAME}" STREQUAL "linux")
+    if ("${OS_ARCH}" STREQUAL "arm64")
+        set(RUST_PLATFORM_TARGET "aarch64-unknown-linux-gnu")
+    else()
+        set(RUST_PLATFORM_TARGET "x86_64-unknown-linux-gnu")
+    endif()
+elseif("${OS_NAME}" STREQUAL "osx")
+    if ("${OS_ARCH}" STREQUAL "arm64")
+        set(RUST_PLATFORM_TARGET "aarch64-apple-darwin")
+    else()
+        set(RUST_PLATFORM_TARGET "x86_64-apple-darwin")
+    endif()
 endif()
 
 # Add rust_example as a CMake target
@@ -56,10 +60,11 @@ ExternalProject_Add(
         ${KERNEL_NAME}
         DOWNLOAD_COMMAND ""
         CONFIGURE_COMMAND ""
-        BUILD_COMMAND cargo build --package deltakernel-ffi --all-features ${RUST_PLATFORM_TARGET}
+        BUILD_COMMAND cargo build --package deltakernel-ffi --all-features --target=${RUST_PLATFORM_TARGET}
+        COMMAND cargo build --package deltakernel-ffi --all-features --release --target=${RUST_PLATFORM_TARGET}
         BINARY_DIR "${CMAKE_SOURCE_DIR}/../delta-kernel-rs"
-        BUILD_BYPRODUCTS "${CMAKE_SOURCE_DIR}/../delta-kernel-rs/target/debug/libdeltakernel_ffi.a"
-        BUILD_BYPRODUCTS "${CMAKE_SOURCE_DIR}/../delta-kernel-rs/target/release/libdeltakernel_ffi.a"
+        BUILD_BYPRODUCTS "${CMAKE_SOURCE_DIR}/../delta-kernel-rs/target/${RUST_PLATFORM_TARGET}/debug/libdeltakernel_ffi.a"
+        BUILD_BYPRODUCTS "${CMAKE_SOURCE_DIR}/../delta-kernel-rs/target/${RUST_PLATFORM_TARGET}/release/libdeltakernel_ffi.a"
         BUILD_BYPRODUCTS "${CMAKE_SOURCE_DIR}/../delta-kernel-rs/target/ffi-headers/deltakernel-ffi.h"
         BUILD_BYPRODUCTS "${CMAKE_SOURCE_DIR}/../delta-kernel-rs/target/ffi-headers/deltakernel-ffi.hpp"
         INSTALL_COMMAND ""
@@ -76,15 +81,15 @@ set(CMAKE_OSX_DEPLOYMENT_TARGET 13.3 CACHE STRING "Minimum OS X deployment versi
 
 # Link delta-kernal-rs to static lib
 target_link_libraries(${EXTENSION_NAME}
-        debug "${CMAKE_SOURCE_DIR}/../delta-kernel-rs/target/debug/libdeltakernel_ffi.a"
-        optimized "${CMAKE_SOURCE_DIR}/../delta-kernel-rs/target/release/libdeltakernel_ffi.a"
+        debug "${CMAKE_SOURCE_DIR}/../delta-kernel-rs/target/${RUST_PLATFORM_TARGET}/debug/libdeltakernel_ffi.a"
+        optimized "${CMAKE_SOURCE_DIR}/../delta-kernel-rs/target/${RUST_PLATFORM_TARGET}/release/libdeltakernel_ffi.a"
         ${PLATFORM_LIBS})
 add_dependencies(${EXTENSION_NAME} delta_kernel)
 
 # Link delta-kernal-rs to dynamic lib
 target_link_libraries(${LOADABLE_EXTENSION_NAME}
-        debug "${CMAKE_SOURCE_DIR}/../delta-kernel-rs/target/debug/libdeltakernel_ffi.a"
-        optimized "${CMAKE_SOURCE_DIR}/../delta-kernel-rs/target/release/libdeltakernel_ffi.a"
+        debug "${CMAKE_SOURCE_DIR}/../delta-kernel-rs/target/${RUST_PLATFORM_TARGET}/debug/libdeltakernel_ffi.a"
+        optimized "${CMAKE_SOURCE_DIR}/../delta-kernel-rs/target/${RUST_PLATFORM_TARGET}/release/libdeltakernel_ffi.a"
         ${PLATFORM_LIBS})
 add_dependencies(${LOADABLE_EXTENSION_NAME} delta_kernel)
 
