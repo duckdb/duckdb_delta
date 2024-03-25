@@ -1,0 +1,40 @@
+# name: test/sql/dat/basic_append.test
+# description: DAT test suite: basic_append 
+# group: [deltatable]
+
+require deltatable
+
+# TODO Missing types: double
+# Query the whole table
+query II
+SELECT letter, number
+FROM delta_scan('delta-kernel-rs/acceptance/tests/dat/out/reader_tests/generated/basic_append/delta')
+----
+d	4
+e	5
+a	1
+b	2
+c	3
+
+query I
+SELECT letter
+FROM delta_scan('delta-kernel-rs/acceptance/tests/dat/out/reader_tests/generated/basic_append/delta')
+----
+d
+e
+a
+b
+c
+
+# TODO: breaks?
+query I
+SELECT number
+FROM delta_scan('delta-kernel-rs/acceptance/tests/dat/out/reader_tests/generated/basic_append/delta')
+----
+d
+e
+a
+b
+c
+
+# TODO add a_float column test

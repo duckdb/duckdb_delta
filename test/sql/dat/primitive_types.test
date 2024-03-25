@@ -1,0 +1,16 @@
+# name: test/sql/dat_primitive_types.test
+# description: DAT test suite: primitive types 
+# group: [deltatable]
+
+require deltatable
+
+# TODO add all the other types
+query III
+SELECT "utf8", "int64", "int32"
+FROM delta_scan('delta-kernel-rs/acceptance/tests/dat/out/reader_tests/generated/all_primitive_types/delta')
+----
+0	0	0
+1	1	1
+2	2	2
+3	3	3
+4	4	4

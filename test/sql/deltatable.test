@@ -1,11 +1,12 @@
 # name: test/sql/deltatable.test
-# description: test deltatable extension
+# description: test deltatable extension with some basic tests
 # group: [deltatable]
 
 require deltatable
 
+# Simplest example
 query I
-SELECT * from delta_scan('delta-kernel-rs/kernel/tests/data/table-with-dv-small')
+SELECT * FROM delta_scan('delta-kernel-rs/kernel/tests/data/table-without-dv-small')
 ----
 0
 1
