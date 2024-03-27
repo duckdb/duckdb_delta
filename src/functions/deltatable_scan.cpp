@@ -49,6 +49,9 @@ struct DeltaScanParquetReader {
                 file,
                 context
         );
+
+        // TODO: this will result in low parallelism for a single large file or skewed file size
+        // This reader will read the whole file
         vector<idx_t> group_indexes(reader.metadata->metadata->row_groups.size());
         std::iota(group_indexes.begin(), group_indexes.end(), 0);
         reader.InitializeScan(scan_state, group_indexes);
@@ -144,15 +147,8 @@ static unique_ptr<FunctionData> DeltaScanScanBind(ClientContext &context,
         result->column_types.push_back(field.second);
     }
 
-    // TODO: What the heck is this?? (copied blindly from parquet extension, seemed important)
-    if (return_types.empty() && names.empty()) {
-        return_types = result->column_types;
-        names = result->column_names;
-    } else {
-        throw std::runtime_error(StringUtil::Format(
-                "Unsupported: Analyzer requested %zd return_types and %zd names",
-                return_types.size(), names.size()));
-    }
+    return_types = result->column_types;
+    names = result->column_names;
 
     result->table_client = table_client;
     result->snapshot = snapshot;
