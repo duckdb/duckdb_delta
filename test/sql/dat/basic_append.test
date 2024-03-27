@@ -4,6 +4,8 @@
 
 require deltatable
 
+require-env DAT_AVAILABLE
+
 # TODO Missing types: double
 # Query the whole table
 query II

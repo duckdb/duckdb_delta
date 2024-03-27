@@ -4,6 +4,8 @@
 
 require deltatable
 
+require-env DAT_AVAILABLE
+
 # TODO add all the other types
 query III
 SELECT "utf8", "int64", "int32"
