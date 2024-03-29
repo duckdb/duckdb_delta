@@ -2,75 +2,95 @@
 
 #include "delta_utils.hpp"
 #include "parquet_reader.hpp"
+#include "parquet_scan.hpp"
 #include "deltatable_functions.hpp"
+#include "duckdb/optimizer/filter_combiner.hpp"
+#include "duckdb/planner/operator/logical_get.hpp"
 
 #include <string>
 #include <numeric>
 
 namespace duckdb {
 
-struct DeltaScanGlobalState : public GlobalTableFunctionState {
-    bool done = false;
+class DeltaTableMetadataProvider : public ParquetMetadataProvider {
+public:
+    bool HaveData() override;
 
-    UniqueKernelPointer <ffi::KernelScanFileIterator> files;
-    vector<column_t> column_ids;
-    optional_ptr<TableFilterSet> filters;
-    std::atomic<int32_t> files_scanned = {0};
-};
+    shared_ptr<ParquetReader> GetInitialReader() override;
+    vector<shared_ptr<ParquetReader>> GetInitializedReaders() override;
 
-struct DeltaScanBindData : public TableFunctionData {
+    //! Get files and
+    string GetFile(idx_t i) override;
+    // TODO: figure out what this signature should look like
+    string GetDeletionVector(string) override;
+
+    void FilterPushdown(ClientContext &context, LogicalGet &get, FunctionData *bind_data_p,
+                        vector<unique_ptr<Expression>> &filters) override;
+    unique_ptr<BaseStatistics> ParquetScanStats(ClientContext &context, const FunctionData *bind_data_p,
+                                                column_t column_index) override;
+    double ParquetProgress(ClientContext &context, const FunctionData *bind_data_p,
+                           const GlobalTableFunctionState *global_state) override;
+    unique_ptr<NodeStatistics> ParquetCardinality(ClientContext &context, const FunctionData *bind_data) override;
+    idx_t ParquetScanMaxThreads(ClientContext &context, const FunctionData *bind_data) override;
+
+public:
+    // Overview
     string path;
     idx_t version;
 
+    // Delta's file generation
     const ffi::SnapshotHandle *snapshot;
     const ffi::ExternTableClientHandle *table_client;
+    UniqueKernelPointer <ffi::KernelScanFileIterator> files;
 
-    vector<string> column_names;
-    vector<LogicalType> column_types;
+    // TODO: this is now copied all over the place, clean it up.
+    vector<string> names;
+
+    bool initialized = false;
+    vector<string> resolved_files;
+    void InitializeFiles();
+
+    TableFilterSet table_filters;
 };
 
-struct DeltaScanParquetReader {
-    MultiFileReaderBindData reader_bind;
-    ParquetReaderScanState scan_state;
-    ParquetOptions parquet_options;
-    ParquetReader reader;
-
-    DeltaScanParquetReader(ClientContext &context, const DeltaScanBindData &bind_data, DeltaScanGlobalState &gstate,
-                           string file)
-            : parquet_options(context), reader(context, file, parquet_options) {
-        MultiFileReader::InitializeReader(
-                reader,
-                {}, // options
-                reader_bind,
-                bind_data.column_types,
-                bind_data.column_names,
-                gstate.column_ids,
-                gstate.filters,
-                file,
-                context
-        );
-
-        // TODO: this will result in low parallelism for a single large file or skewed file size
-        // This reader will read the whole file
-        vector<idx_t> group_indexes(reader.metadata->metadata->row_groups.size());
-        std::iota(group_indexes.begin(), group_indexes.end(), 0);
-        reader.InitializeScan(scan_state, group_indexes);
+bool DeltaTableMetadataProvider::HaveData() {
+    if (!initialized && !table_filters.filters.empty()) {
+        InitializeFiles();
     }
 
-    void ReadOneChunk(DataChunk &output) {
-        reader.Scan(scan_state, output);
-        MultiFileReader::FinalizeChunk(reader_bind, reader.reader_data, output);
+    // This ensures the first file is fetched if it exists
+    GetFile(0);
+
+    if (resolved_files.empty()) {
+        return false;
     }
-};
 
-struct DeltaScanLocalState : public LocalTableFunctionState {
-    std::unique_ptr<DeltaScanParquetReader> reader;
-};
+    return true;
+}
 
-// Try to claim one of the remaining files to read
-static unique_ptr<DeltaScanParquetReader> TryBindNextFileScan(ClientContext &context,
-                                                              const DeltaScanBindData &bind_data,
-                                                              DeltaScanGlobalState &gstate) {
+shared_ptr<ParquetReader> DeltaTableMetadataProvider::GetInitialReader() {
+    // Note: we don't need to open any parquet files so we return nothing here
+    return nullptr;
+}
+
+vector<shared_ptr<ParquetReader>> DeltaTableMetadataProvider::GetInitializedReaders() {
+    // Note: we don't need to open any parquet files so we return nothing here
+    return {};
+}
+
+string DeltaTableMetadataProvider::GetFile(idx_t i) {
+    if (!initialized) {
+        InitializeFiles();
+    }
+    // We already have this file
+    if (i < resolved_files.size()) {
+        return resolved_files[i];
+    }
+
+    if (i != resolved_files.size()) {
+        throw InternalException("Calling GetFile on a file beyond the first unloaded file is not allowed!");
+    }
+
     struct Visitor {
         std::string file_name;
         bool file_name_valid = false;
@@ -81,110 +101,106 @@ static unique_ptr<DeltaScanParquetReader> TryBindNextFileScan(ClientContext &con
             v.file_name_valid = true;
         }
     } visitor;
-    kernel_scan_files_next(gstate.files.get(), &visitor, Visitor::visit);
+    kernel_scan_files_next(files.get(), &visitor, Visitor::visit);
     if (!visitor.file_name_valid) {
-        return nullptr;
+        return "";
     }
 
-    auto file_index = gstate.files_scanned++;
-    std::string file = bind_data.path + "/" + visitor.file_name;
-    return make_uniq<DeltaScanParquetReader>(context, bind_data, gstate, file);
+    auto new_file = path + "/" + visitor.file_name;
+    resolved_files.push_back(new_file);
+    return new_file;
 }
 
-static unique_ptr<LocalTableFunctionState> DeltaScanScanInitLocal(ExecutionContext &context,
-                                                                  TableFunctionInitInput &input,
-                                                                  GlobalTableFunctionState *gstate_p) {
-    auto &bind_data = input.bind_data->Cast<DeltaScanBindData>();
-    auto &gstate = gstate_p->Cast<DeltaScanGlobalState>();
-    auto reader = TryBindNextFileScan(context.client, bind_data, gstate);
-    if (!reader) {
-        return nullptr; // we started too late, and other threads already claimed all files
-    }
-    auto result = make_uniq<DeltaScanLocalState>();
-    result->reader = std::move(reader);
-    return std::move(result);
+string DeltaTableMetadataProvider::GetDeletionVector(string) {
+    throw NotImplementedException("Not implemented");
 }
 
-static unique_ptr<GlobalTableFunctionState> DeltaScanScanInitGlobal(ClientContext &context,
-                                                                    TableFunctionInitInput &input) {
-    auto &bind_data = input.bind_data->CastNoConst<DeltaScanBindData>();
-    auto result = make_uniq<DeltaScanGlobalState>();
+void DeltaTableMetadataProvider::InitializeFiles() {
+    // TODO pass filters here!
+    PredicateVisitor visitor(names, &table_filters);
+    auto scan_files_result = ffi::kernel_scan_files_init(snapshot, table_client, &visitor);
 
-    PredicateVisitor visitor(bind_data.column_names, input.filters);
-    auto scan_files_result = ffi::kernel_scan_files_init(bind_data.snapshot, bind_data.table_client, &visitor);
-
-    result->files = {
+    files = {
             unpack_result_or_throw(scan_files_result, "kernel_scan_files_init in InitGlobal"),
             ffi::kernel_scan_files_free,
     };
-
-    result->column_ids = input.column_ids;
-    result->filters = input.filters;
-    return std::move(result);
+    initialized = true;
 }
 
+void DeltaTableMetadataProvider::FilterPushdown(ClientContext &context, LogicalGet &get, FunctionData *bind_data_p,
+                                               vector<unique_ptr<Expression>> &filters) {
+    FilterCombiner combiner(context);
+    for (const auto &filter : filters) {
+        combiner.AddFilter(filter->Copy());
+    }
+    table_filters = combiner.GenerateTableScanFilters(get.column_ids);
+}
+
+unique_ptr<BaseStatistics> DeltaTableMetadataProvider::ParquetScanStats(ClientContext &context, const FunctionData *bind_data_p,
+                                                                       column_t column_index) {
+    // NOTE: not implemented
+    return nullptr;
+}
+
+double DeltaTableMetadataProvider::ParquetProgress(ClientContext &context, const FunctionData *bind_data_p,
+                                                  const GlobalTableFunctionState *global_state) {
+    // TODO: do clever things for parquet progress
+    return 0.0;
+}
+
+unique_ptr<NodeStatistics> DeltaTableMetadataProvider::ParquetCardinality(ClientContext &context, const FunctionData *bind_data) {
+    // TODO: do clever things for cardinality
+    return nullptr;
+}
+
+idx_t DeltaTableMetadataProvider::ParquetScanMaxThreads(ClientContext &context, const FunctionData *bind_data) {
+    // TODO: read the metadata here
+    return TaskScheduler::GetScheduler(context).NumberOfThreads();
+}
 
 static unique_ptr<FunctionData> DeltaScanScanBind(ClientContext &context,
                                                   TableFunctionBindInput &input,
                                                   vector<LogicalType> &return_types,
                                                   vector<string> &names) {
-    auto result = make_uniq<DeltaScanBindData>();
-    result->path = input.inputs[0].GetValue<string>();
+    auto result = make_uniq<ParquetReadBindData>();
 
-    auto path_slice = str_slice(result->path);
+    // Set path
+    auto metadata_provider = make_uniq<DeltaTableMetadataProvider>();
+    metadata_provider->path = input.inputs[0].GetValue<string>();
 
+    // Set version
+    auto path_slice = str_slice(metadata_provider->path);
     auto table_client_res = get_default_client(path_slice, error_allocator);
     const ffi::ExternTableClientHandle *table_client = unpack_result_or_throw(table_client_res, "get_default_client in DeltaScanScanBind");
 
     auto snapshot_res = snapshot(path_slice, table_client);
     const ffi::SnapshotHandle *snapshot = unpack_result_or_throw(snapshot_res, "snapshot in DeltaScanScanBind");
+    metadata_provider->version = ffi::version(snapshot);
 
-    result->version = ffi::version(snapshot);
-
+    // Parse schema
     auto schema = SchemaVisitor::VisitSnapshotSchema(snapshot);
     for (const auto &field: *schema) {
-        result->column_names.push_back(field.first);
-        result->column_types.push_back(field.second);
+        result->names.push_back(field.first);
+        result->types.push_back(field.second);
     }
+    return_types = result->types;
+    names = result->names;
 
-    return_types = result->column_types;
-    names = result->column_names;
+    metadata_provider->names = names;
 
-    result->table_client = table_client;
-    result->snapshot = snapshot;
+    // Pass through Delta Kernel structures
+    metadata_provider->table_client = table_client;
+    metadata_provider->snapshot = snapshot;
 
+    result->metadata_provider = std::move(metadata_provider);
     return std::move(result);
-}
-
-static void DeltaScanScanTableFun(ClientContext &context, TableFunctionInput &input, DataChunk &output) {
-    if (!input.local_state) {
-        return; // this worker didn't even get a first file
-    }
-
-    auto &bind_data = input.bind_data->Cast<DeltaScanBindData>();
-    auto &gstate = input.global_state->Cast<DeltaScanGlobalState>();
-    auto &state = input.local_state->Cast<DeltaScanLocalState>();
-    for (;;) {
-        state.reader->ReadOneChunk(output);
-        if (output.size() > 0) {
-            return; // got some data!
-        }
-
-        auto reader = TryBindNextFileScan(context, bind_data, gstate);
-        if (!reader) {
-            return; // no more files to scan
-        }
-
-        // try again with the new file
-        state.reader = std::move(reader);
-    }
 }
 
 TableFunctionSet DeltatableFunctions::GetDeltaScanFunction() {
     TableFunctionSet function_set("delta_scan");
 
-    auto fun = TableFunction("delta_scan", {LogicalType::VARCHAR}, DeltaScanScanTableFun, DeltaScanScanBind,
-                             DeltaScanScanInitGlobal, DeltaScanScanInitLocal);
+    auto fun = ParquetScanFunction::CreateParquetScan("delta_scan", DeltaScanScanBind, nullptr, nullptr);
+    fun.get_bind_info = nullptr;
     function_set.AddFunction(fun);
 
     return function_set;
