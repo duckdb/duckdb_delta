@@ -6,10 +6,10 @@
 
 namespace duckdb {
 
-vector<TableFunctionSet> DeltatableFunctions::GetTableFunctions() {
+vector<TableFunctionSet> DeltatableFunctions::GetTableFunctions(DatabaseInstance &instance) {
     vector<TableFunctionSet> functions;
 
-    functions.push_back(GetDeltaScanFunction());
+    functions.push_back(GetDeltaScanFunction(instance));
 
     return functions;
 }

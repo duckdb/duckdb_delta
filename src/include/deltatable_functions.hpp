@@ -14,9 +14,9 @@ namespace duckdb {
 
 class DeltatableFunctions {
 public:
-    static vector<TableFunctionSet> GetTableFunctions();
+    static vector<TableFunctionSet> GetTableFunctions(DatabaseInstance &instance);
 
 private:
-    static TableFunctionSet GetDeltaScanFunction();
+    static TableFunctionSet GetDeltaScanFunction(DatabaseInstance &instance);
 };
 } // namespace duckdb

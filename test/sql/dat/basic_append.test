@@ -2,6 +2,8 @@
 # description: DAT test suite: basic_append 
 # group: [deltatable]
 
+require parquet
+
 require deltatable
 
 require-env DAT_AVAILABLE

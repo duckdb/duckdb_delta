@@ -13,7 +13,7 @@ namespace duckdb {
 
 static void LoadInternal(DatabaseInstance &instance) {
     // Load functions
-    for (const auto &function : DeltatableFunctions::GetTableFunctions()) {
+    for (const auto &function : DeltatableFunctions::GetTableFunctions(instance)) {
         ExtensionUtil::RegisterFunction(instance, function);
     }
 }

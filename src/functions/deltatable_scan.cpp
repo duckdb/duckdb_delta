@@ -1,39 +1,24 @@
 #include "duckdb/function/table_function.hpp"
 
 #include "delta_utils.hpp"
-#include "parquet_reader.hpp"
-#include "parquet_scan.hpp"
 #include "deltatable_functions.hpp"
 #include "duckdb/optimizer/filter_combiner.hpp"
 #include "duckdb/planner/operator/logical_get.hpp"
+#include "duckdb/common/multi_file_reader.hpp"
+#include "duckdb/main/extension_util.hpp"
+#include "duckdb/catalog/catalog_entry/table_function_catalog_entry.hpp"
 
 #include <string>
 #include <numeric>
 
 namespace duckdb {
 
-class DeltaTableMetadataProvider : public ParquetMetadataProvider {
-public:
-    bool HaveData() override;
-
-    shared_ptr<ParquetReader> GetInitialReader() override;
-    vector<shared_ptr<ParquetReader>> GetInitializedReaders() override;
-
-    //! Get files and
+//! The DeltaTableSnapshot implements the MultiFileList API to allow injecting it into the regular DuckDB parquet scan
+struct DeltaTableSnapshot : public MultiFileList {
     string GetFile(idx_t i) override;
-    // TODO: figure out what this signature should look like
-    string GetDeletionVector(string) override;
-
-    void FilterPushdown(ClientContext &context, LogicalGet &get, FunctionData *bind_data_p,
-                        vector<unique_ptr<Expression>> &filters) override;
-    unique_ptr<BaseStatistics> ParquetScanStats(ClientContext &context, const FunctionData *bind_data_p,
-                                                column_t column_index) override;
-    double ParquetProgress(ClientContext &context, const FunctionData *bind_data_p,
-                           const GlobalTableFunctionState *global_state) override;
-    unique_ptr<NodeStatistics> ParquetCardinality(ClientContext &context, const FunctionData *bind_data) override;
-    idx_t ParquetScanMaxThreads(ClientContext &context, const FunctionData *bind_data) override;
-
-public:
+    //! (optional) Push down filters into the MultiFileList; sometimes the filters can be used to skip files completely
+    bool ComplexFilterPushdown(ClientContext &context, const MultiFileReaderOptions &options, LogicalGet &get,
+                                       vector<unique_ptr<Expression>> &filters) override;
     // Overview
     string path;
     idx_t version;
@@ -53,32 +38,65 @@ public:
     TableFilterSet table_filters;
 };
 
-bool DeltaTableMetadataProvider::HaveData() {
-    if (!initialized && !table_filters.filters.empty()) {
-        InitializeFiles();
+struct DeltaMultiFilereader : public MultiFileReader {
+    static unique_ptr<MultiFileReader> CreateInstance();
+
+    //! Add the parameters for multi-file readers (e.g. union_by_name, filename) to a table function
+    void AddParameters(TableFunction &table_function) override;
+    //! Performs any globbing for the multi-file reader and returns a list of files to be read
+    unique_ptr<MultiFileList> GetFileList(ClientContext &context, const Value &input, const string &name,
+                                                             FileGlobOptions options = FileGlobOptions::DISALLOW_EMPTY) override;
+    //! Tries to use the MultiFileReader for binding. This method can be overridden by custom MultiFileReaders
+    bool Bind(MultiFileReaderOptions &options, MultiFileList &files,
+                                 vector<LogicalType> &return_types, vector<string> &names, MultiFileReaderBindData &bind_data) override;
+};
+
+unique_ptr<MultiFileReader> DeltaMultiFilereader::CreateInstance() {
+    return std::move(make_uniq<DeltaMultiFilereader>());
+}
+
+void DeltaMultiFilereader::AddParameters(TableFunction &table_function) {
+    table_function.named_parameters["filename"] = LogicalType::BOOLEAN;
+}
+
+bool DeltaMultiFilereader::Bind(MultiFileReaderOptions &options, MultiFileList &files,
+              vector<LogicalType> &return_types, vector<string> &names, MultiFileReaderBindData &bind_data)  {
+    auto &delta_table_snapshot = dynamic_cast<DeltaTableSnapshot&>(files);
+
+    auto schema = SchemaVisitor::VisitSnapshotSchema(delta_table_snapshot.snapshot);
+    for (const auto &field: *schema) {
+        names.push_back(field.first);
+        return_types.push_back(field.second);
     }
 
-    // This ensures the first file is fetched if it exists
-    GetFile(0);
+    delta_table_snapshot.names = names;
 
-    if (resolved_files.empty()) {
-        return false;
-    }
-
+    // Indicate we have performed a bind and no binding needs to occur on the parquet files themselves;
     return true;
+};
+
+unique_ptr<MultiFileList> DeltaMultiFilereader::GetFileList(ClientContext &context, const Value &input, const string &name,
+                                                       FileGlobOptions options) {
+    // Set path
+    auto delta_file_list = make_uniq<DeltaTableSnapshot>();
+    delta_file_list->path = input.GetValue<string>();
+
+    // Set version
+    auto path_slice = str_slice(delta_file_list->path);
+    auto table_client_res = get_default_client(path_slice, error_allocator);
+    const ffi::ExternTableClientHandle *table_client = unpack_result_or_throw(table_client_res, "get_default_client in DeltaScanScanBind");
+
+    auto snapshot_res = snapshot(path_slice, table_client);
+    const ffi::SnapshotHandle *snapshot = unpack_result_or_throw(snapshot_res, "snapshot in DeltaScanScanBind");
+    delta_file_list->version = ffi::version(snapshot);
+
+    delta_file_list->table_client = table_client;
+    delta_file_list->snapshot = snapshot;
+
+    return std::move(delta_file_list);
 }
 
-shared_ptr<ParquetReader> DeltaTableMetadataProvider::GetInitialReader() {
-    // Note: we don't need to open any parquet files so we return nothing here
-    return nullptr;
-}
-
-vector<shared_ptr<ParquetReader>> DeltaTableMetadataProvider::GetInitializedReaders() {
-    // Note: we don't need to open any parquet files so we return nothing here
-    return {};
-}
-
-string DeltaTableMetadataProvider::GetFile(idx_t i) {
+string DeltaTableSnapshot::GetFile(idx_t i) {
     if (!initialized) {
         InitializeFiles();
     }
@@ -111,12 +129,7 @@ string DeltaTableMetadataProvider::GetFile(idx_t i) {
     return new_file;
 }
 
-string DeltaTableMetadataProvider::GetDeletionVector(string) {
-    throw NotImplementedException("Not implemented");
-}
-
-void DeltaTableMetadataProvider::InitializeFiles() {
-    // TODO pass filters here!
+void DeltaTableSnapshot::InitializeFiles() {
     PredicateVisitor visitor(names, &table_filters);
     auto scan_files_result = ffi::kernel_scan_files_init(snapshot, table_client, &visitor);
 
@@ -127,83 +140,37 @@ void DeltaTableMetadataProvider::InitializeFiles() {
     initialized = true;
 }
 
-void DeltaTableMetadataProvider::FilterPushdown(ClientContext &context, LogicalGet &get, FunctionData *bind_data_p,
+bool DeltaTableSnapshot::ComplexFilterPushdown(ClientContext &context, const MultiFileReaderOptions &options, LogicalGet &get,
                                                vector<unique_ptr<Expression>> &filters) {
     FilterCombiner combiner(context);
     for (const auto &filter : filters) {
         combiner.AddFilter(filter->Copy());
     }
     table_filters = combiner.GenerateTableScanFilters(get.column_ids);
+
+    // TODO: can/should we figure out if this filtered anything?
+    return true;
 }
 
-unique_ptr<BaseStatistics> DeltaTableMetadataProvider::ParquetScanStats(ClientContext &context, const FunctionData *bind_data_p,
-                                                                       column_t column_index) {
-    // NOTE: not implemented
-    return nullptr;
-}
+TableFunctionSet DeltatableFunctions::GetDeltaScanFunction(DatabaseInstance &instance) {
+    auto &parquet_scan = ExtensionUtil::GetTableFunction(instance, "parquet_scan");
 
-double DeltaTableMetadataProvider::ParquetProgress(ClientContext &context, const FunctionData *bind_data_p,
-                                                  const GlobalTableFunctionState *global_state) {
-    // TODO: do clever things for parquet progress
-    return 0.0;
-}
+    auto parquet_scan_copy = parquet_scan.functions;
 
-unique_ptr<NodeStatistics> DeltaTableMetadataProvider::ParquetCardinality(ClientContext &context, const FunctionData *bind_data) {
-    // TODO: do clever things for cardinality
-    return nullptr;
-}
-
-idx_t DeltaTableMetadataProvider::ParquetScanMaxThreads(ClientContext &context, const FunctionData *bind_data) {
-    // TODO: read the metadata here
-    return TaskScheduler::GetScheduler(context).NumberOfThreads();
-}
-
-static unique_ptr<FunctionData> DeltaScanScanBind(ClientContext &context,
-                                                  TableFunctionBindInput &input,
-                                                  vector<LogicalType> &return_types,
-                                                  vector<string> &names) {
-    auto result = make_uniq<ParquetReadBindData>();
-
-    // Set path
-    auto metadata_provider = make_uniq<DeltaTableMetadataProvider>();
-    metadata_provider->path = input.inputs[0].GetValue<string>();
-
-    // Set version
-    auto path_slice = str_slice(metadata_provider->path);
-    auto table_client_res = get_default_client(path_slice, error_allocator);
-    const ffi::ExternTableClientHandle *table_client = unpack_result_or_throw(table_client_res, "get_default_client in DeltaScanScanBind");
-
-    auto snapshot_res = snapshot(path_slice, table_client);
-    const ffi::SnapshotHandle *snapshot = unpack_result_or_throw(snapshot_res, "snapshot in DeltaScanScanBind");
-    metadata_provider->version = ffi::version(snapshot);
-
-    // Parse schema
-    auto schema = SchemaVisitor::VisitSnapshotSchema(snapshot);
-    for (const auto &field: *schema) {
-        result->names.push_back(field.first);
-        result->types.push_back(field.second);
+    for (auto &function : parquet_scan_copy.functions) {
+        //! Register the MultiFileReader as the driver for reads
+        function.get_multi_file_reader = DeltaMultiFilereader::CreateInstance;
+        function.serialize = nullptr;
+        function.deserialize = nullptr;
+        function.statistics = nullptr;
+        function.table_scan_progress = nullptr;
+        function.cardinality = nullptr;
+        function.get_bind_info = nullptr;
+        function.name = "delta_scan";
     }
-    return_types = result->types;
-    names = result->names;
 
-    metadata_provider->names = names;
-
-    // Pass through Delta Kernel structures
-    metadata_provider->table_client = table_client;
-    metadata_provider->snapshot = snapshot;
-
-    result->metadata_provider = std::move(metadata_provider);
-    return std::move(result);
-}
-
-TableFunctionSet DeltatableFunctions::GetDeltaScanFunction() {
-    TableFunctionSet function_set("delta_scan");
-
-    auto fun = ParquetScanFunction::CreateParquetScan("delta_scan", DeltaScanScanBind, nullptr, nullptr);
-    fun.get_bind_info = nullptr;
-    function_set.AddFunction(fun);
-
-    return function_set;
+    parquet_scan_copy.name = "delta_scan";
+    return parquet_scan_copy;
 }
 
 } // namespace duckdb
