@@ -184,7 +184,7 @@ bool result_is_ok(ffi::ExternResult<T> result) {
     throw InternalException("Invalid error ExternResult tag found!");
 }
 
-ffi::KernelStringSlice str_slice(const string &str) {
+ffi::KernelStringSlice to_delta_string_slice(const string &str) {
     return {str.data(), str.size()};
 }
 
@@ -233,7 +233,7 @@ private:
     }
 
     uintptr_t VisitConstantFilter(const string &col_name, const ConstantFilter &filter, ffi::KernelExpressionVisitorState* state) {
-        auto maybe_left = ffi::visit_expression_column(state, str_slice(col_name), error_allocator);
+        auto maybe_left = ffi::visit_expression_column(state, to_delta_string_slice(col_name), error_allocator);
         uintptr_t left = unpack_result_or_throw(maybe_left, "VisitConstantFilter failed to visit_expression_column");
 
         uintptr_t right = ~0;
@@ -246,7 +246,7 @@ private:
             case LogicalType::VARCHAR: {
                 // WARNING: C++ lifetime extension rules don't protect calls of the form foo(std::string(...).c_str())
                 auto str = StringValue::Get(value);
-                auto maybe_right = ffi::visit_expression_literal_string(state, str_slice(col_name), error_allocator);
+                auto maybe_right = ffi::visit_expression_literal_string(state, to_delta_string_slice(col_name), error_allocator);
                 right = unpack_result_or_throw(maybe_right, "VisitConstantFilter failed to visit_expression_literal_string");
                 break;
             }

@@ -2,6 +2,8 @@
 # description: DAT test suite: primitive types 
 # group: [deltatable]
 
+require parquet
+
 require deltatable
 
 require-env DAT_AVAILABLE

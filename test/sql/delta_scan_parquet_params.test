@@ -1,0 +1,37 @@
+# name: test/sql/delta_scan_parquet_params.test
+# description: test that named params to the parquet_scan still work
+# group: [deltatable]
+
+require parquet
+
+require deltatable
+
+# Filename param (i.e. MultiFileReader provided) 
+query II
+SELECT * FROM delta_scan('delta-kernel-rs/kernel/tests/data/table-without-dv-small', filename=1)
+----
+0	delta-kernel-rs/kernel/tests/data/table-without-dv-small/part-00000-517f5d32-9c95-48e8-82b4-0229cc194867-c000.snappy.parquet
+1	delta-kernel-rs/kernel/tests/data/table-without-dv-small/part-00000-517f5d32-9c95-48e8-82b4-0229cc194867-c000.snappy.parquet
+2	delta-kernel-rs/kernel/tests/data/table-without-dv-small/part-00000-517f5d32-9c95-48e8-82b4-0229cc194867-c000.snappy.parquet
+3	delta-kernel-rs/kernel/tests/data/table-without-dv-small/part-00000-517f5d32-9c95-48e8-82b4-0229cc194867-c000.snappy.parquet
+4	delta-kernel-rs/kernel/tests/data/table-without-dv-small/part-00000-517f5d32-9c95-48e8-82b4-0229cc194867-c000.snappy.parquet
+5	delta-kernel-rs/kernel/tests/data/table-without-dv-small/part-00000-517f5d32-9c95-48e8-82b4-0229cc194867-c000.snappy.parquet
+6	delta-kernel-rs/kernel/tests/data/table-without-dv-small/part-00000-517f5d32-9c95-48e8-82b4-0229cc194867-c000.snappy.parquet
+7	delta-kernel-rs/kernel/tests/data/table-without-dv-small/part-00000-517f5d32-9c95-48e8-82b4-0229cc194867-c000.snappy.parquet
+8	delta-kernel-rs/kernel/tests/data/table-without-dv-small/part-00000-517f5d32-9c95-48e8-82b4-0229cc194867-c000.snappy.parquet
+9	delta-kernel-rs/kernel/tests/data/table-without-dv-small/part-00000-517f5d32-9c95-48e8-82b4-0229cc194867-c000.snappy.parquet
+
+# FileRowNumer param (i.e. ParquetReader provided)
+query II
+SELECT * FROM delta_scan('delta-kernel-rs/kernel/tests/data/table-without-dv-small', file_row_number=1)
+----
+0	0
+1	1
+2	2
+3	3
+4	4
+5	5
+6	6
+7	7
+8	8
+9	9
