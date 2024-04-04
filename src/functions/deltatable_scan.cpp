@@ -172,7 +172,7 @@ void DeltaMultiFileReader::FinalizeChunk(ClientContext &context, const MultiFile
 
         // Note: this demo function shows how we can use DuckDB's Binder create expression-based generated columns
         if (custom_bind_data.file_number_column_idx != DConstants::INVALID_INDEX) {
-            auto metadata = custom_bind_data.current_snapshot.GetFileMetadata(filename);c
+            auto metadata = custom_bind_data.current_snapshot.GetFileMetadata(filename);
 
             //! Create Dummy expression (0 + file_number)
             vector<unique_ptr<ParsedExpression>> child_expr;
