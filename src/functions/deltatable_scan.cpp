@@ -7,6 +7,11 @@
 #include "duckdb/main/extension_util.hpp"
 #include "duckdb/catalog/catalog_entry/table_function_catalog_entry.hpp"
 #include "duckdb/common/types/data_chunk.hpp"
+#include "duckdb/parser/expression/constant_expression.hpp"
+#include "duckdb/parser/expression/function_expression.hpp"
+#include "duckdb/parser/parsed_expression.hpp"
+#include "duckdb/execution/expression_executor.hpp"
+#include "duckdb/planner/binder.hpp"
 
 #include <string>
 #include <numeric>
@@ -157,20 +162,35 @@ unique_ptr<MultiFileList> DeltaMultiFileReader::GetFileList(ClientContext &conte
     return make_uniq<DeltaTableSnapshot>(input.GetValue<string>());
 }
 
-void DeltaMultiFileReader::FinalizeChunk(const MultiFileReaderBindData &bind_data,
+void DeltaMultiFileReader::FinalizeChunk(ClientContext &context, const MultiFileReaderBindData &bind_data,
                    const MultiFileReaderData &reader_data, DataChunk &chunk, const string &filename) {
     // Base class finalization first
-    MultiFileReader::FinalizeChunk(bind_data, reader_data, chunk, filename);
+    MultiFileReader::FinalizeChunk(context, bind_data, reader_data, chunk, filename);
 
-    // Note: code below does not actually do anything currently, since the constant is already filled in by MultiFileReader::FinalizeChunk.
-    //       However, it demonstrates how we could pass something to the delta_kernel here to
     if (bind_data.custom_data) {
         auto &custom_bind_data = dynamic_cast<DeltaMultiFileReaderBindData&>(*bind_data.custom_data);
 
+        // Note: this demo function shows how we can use DuckDB's Binder create expression-based generated columns
         if (custom_bind_data.file_number_column_idx != DConstants::INVALID_INDEX) {
-            auto metadata = custom_bind_data.current_snapshot.GetFileMetadata(filename);
+            auto metadata = custom_bind_data.current_snapshot.GetFileMetadata(filename);c
 
-            chunk.data[custom_bind_data.file_number_column_idx].Reference(Value::UBIGINT(metadata.file_number));
+            //! Create Dummy expression (0 + file_number)
+            vector<unique_ptr<ParsedExpression>> child_expr;
+            child_expr.push_back(make_uniq<ConstantExpression>(Value::UBIGINT(0)));
+            child_expr.push_back(make_uniq<ConstantExpression>(Value::UBIGINT(metadata.file_number)));
+            unique_ptr<ParsedExpression> expr = make_uniq<FunctionExpression>("+", std::move(child_expr), nullptr, nullptr, false, true);
+
+            //! s dummy expression
+            auto binder = Binder::CreateBinder(context);
+            ExpressionBinder expr_binder(*binder, context);
+            auto bound_expr = expr_binder.Bind(expr, nullptr);
+
+            //! Execute dummy expression into result column
+            ExpressionExecutor expr_executor(context);
+            expr_executor.AddExpression(*bound_expr);
+
+            //! Execute the expression directly into the output Chunk
+            expr_executor.ExecuteExpression(chunk.data[custom_bind_data.file_number_column_idx]);
         }
     }
 };

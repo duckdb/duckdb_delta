@@ -82,7 +82,7 @@ struct DeltaMultiFileReader : public MultiFileReader {
                                        const vector<column_t> &global_column_ids, MultiFileReaderData &reader_data,
                                        ClientContext &context) override;
     //! Override the FinalizeChunk method
-    void FinalizeChunk(const MultiFileReaderBindData &bind_data,
+    void FinalizeChunk(ClientContext &context, const MultiFileReaderBindData &bind_data,
                        const MultiFileReaderData &reader_data, DataChunk &chunk, const string &filename) override;
 
     //! Override the ParseOption call to parse delta_scan specific options
