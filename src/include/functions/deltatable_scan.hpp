@@ -46,7 +46,7 @@ protected:
 
     //! Delta Kernel Structures
     const ffi::SnapshotHandle *snapshot;
-    const ffi::ExternTableClientHandle *table_client;
+    const ffi::ExternEngineInterfaceHandle *table_client;
     UniqueKernelPointer <ffi::KernelScanFileIterator> files;
 
     //! Names

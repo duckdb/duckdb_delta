@@ -2,9 +2,9 @@
 # description: test deltatable extension with some basic tests
 # group: [deltatable]
 
-require deltatable
-
 require parquet
+
+require deltatable
 
 # Simplest example
 query I

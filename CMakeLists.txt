@@ -84,6 +84,9 @@ include_directories(delta-kernel-rs/target/ffi-headers)
 # Hides annoying linker warnings
 set(CMAKE_OSX_DEPLOYMENT_TARGET 13.3 CACHE STRING "Minimum OS X deployment version" FORCE)
 
+# Add the default client
+add_compile_definitions(DEFINE_DEFAULT_CLIENT)
+
 # Link delta-kernal-rs to static lib
 target_link_libraries(${EXTENSION_NAME}
         debug "${CMAKE_SOURCE_DIR}/../delta-kernel-rs/target/${RUST_PLATFORM_TARGET}/debug/libdeltakernel_ffi.a"

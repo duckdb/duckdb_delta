@@ -22,7 +22,7 @@ DeltaTableSnapshot::DeltaTableSnapshot(const string &path) : path(path) {
     auto path_slice = to_delta_string_slice(path);
 
     // Initialize Table Client
-    auto table_client_res = get_default_client(path_slice, error_allocator);
+    auto table_client_res = ffi::get_default_client(path_slice, error_allocator);
     table_client = unpack_result_or_throw(table_client_res, "get_default_client in DeltaScanScanBind");
 
     // Initialize Snapshot

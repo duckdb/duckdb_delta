@@ -133,9 +133,13 @@ static const char* KernelErrorEnumStrings[] = {
         "UnknownError",
         "FFIError",
         "ArrowError",
+        "EngineDataTypeError",
+        "ExtractError",
         "GenericError",
+        "IOErrorError",
         "ParquetError",
         "ObjectStoreError",
+        "ObjectStorePathError",
         "FileNotFoundError",
         "MissingColumnError",
         "UnexpectedColumnTypeError",
@@ -144,9 +148,15 @@ static const char* KernelErrorEnumStrings[] = {
         "DeletionVectorError",
         "InvalidUrlError",
         "MalformedJsonError",
-        "MissingMetadataError"
+        "MissingMetadataError",
+        "MissingProtocolError",
+        "MissingMetadataAndProtocolError",
+        "ParseError",
+        "JoinFailureError",
+        "Utf8Error",
+        "ParseIntError"
 };
-static_assert(sizeof(KernelErrorEnumStrings)/sizeof(char*)-1 == (int)ffi::KernelError::MissingMetadataError,
+static_assert(sizeof(KernelErrorEnumStrings)/sizeof(char*)-1 == (int)ffi::KernelError::ParseIntError,
               "KernelErrorEnumStrings failin");
 
 static string kernel_error_to_string(ffi::KernelError err) {
