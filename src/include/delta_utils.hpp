@@ -1,6 +1,6 @@
 #pragma once
 
-#include "deltakernel-ffi.hpp"
+#include "delta_kernel_ffi.hpp"
 #include "duckdb/planner/filter/constant_filter.hpp"
 #include "duckdb/planner/filter/conjunction_filter.hpp"
 #include <iostream>
