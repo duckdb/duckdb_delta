@@ -1,0 +1,13 @@
+# name: test/sql/deltatable_with_part.test
+# description: test deltatable extension with partitions
+# group: [deltatable]
+
+require parquet
+
+require deltatable
+
+# FIXME: this fails because Delta Kernel does not expose the __HIVE_DEFAULT_PARTITION__ it seems
+statement error
+SELECT * FROM delta_scan('delta-kernel-rs/kernel/tests/data/basic_partitioned')
+----
+IO Error: Failed to read file "delta-kernel-rs/kernel/tests/data/basic_partitioned/letter=__HIVE_DEFAULT_PARTITION__

@@ -1,0 +1,22 @@
+# name: test/sql/deltatable_with_dv.test
+# description: test deltatable extension with deletion vector
+# group: [deltatable]
+
+require parquet
+
+require deltatable
+
+# Simplest example
+query I
+SELECT * FROM delta_scan('delta-kernel-rs/kernel/tests/data/table-with-dv-small')
+----
+1
+2
+3
+4
+5
+6
+7
+8
+
+# TODO: test with laaarge data with dv's

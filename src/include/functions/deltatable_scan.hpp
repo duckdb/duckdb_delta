@@ -16,6 +16,11 @@ namespace duckdb {
 struct DeltaFileMetaData {
     idx_t delta_snapshot_version;
     idx_t file_number;
+
+    UniqueKernelPointer <ffi::KernelBoolSlice> selection_vector;
+    idx_t current_selection_vector_offset = 0; // TODO move into a state passed to FinalizeChunk
+
+    case_insensitive_map_t<string> partition_map;
 };
 
 //! The DeltaTableSnapshot implements the MultiFileList API to allow injecting it into the regular DuckDB parquet scan
@@ -31,7 +36,7 @@ struct DeltaTableSnapshot : public MultiFileList {
 
     //! Demo function for testing; to be replaced and potentially baseclassed in duckdb (for usage in statistics, progress
     //! calculation etc)
-    DeltaFileMetaData GetFileMetadata(const string &path) {
+    DeltaFileMetaData& GetFileMetadata(const string &path) {
         return metadata[path];
     };
 
@@ -39,7 +44,8 @@ protected:
     // TODO: How to guarantee we only call this after the filter pushdown?
     void InitializeFiles();
 
-protected:
+// TODO: change back to protected
+public:
     //! Table Info
     string path;
     idx_t version;
@@ -47,7 +53,10 @@ protected:
     //! Delta Kernel Structures
     const ffi::SnapshotHandle *snapshot;
     const ffi::ExternEngineInterfaceHandle *table_client;
-    UniqueKernelPointer <ffi::KernelScanFileIterator> files;
+    ffi::Scan* scan;
+    ffi::GlobalScanState *global_state;
+    UniqueKernelPointer <ffi::KernelScanDataIterator> scan_data_iterator;
+    UniqueKernelPointer <ffi::KernelScanFileIterator> files; // Deprecated
 
     //! Names
     vector<string> names;

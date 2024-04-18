@@ -40,6 +40,10 @@ def generate_test_data(path, query, part_column=False):
 
 delete_old_files()
 
+### Simple partitioned table
+query = "CREATE table test_table AS SELECT i, i%2 as part from range(0,10) tbl(i);"
+generate_test_data("simple_partitioned", query, "part")
+
 ### Lineitem SF0.01 No partitions
 query = "call dbgen(sf=0.01);"
 query += "CREATE table test_table AS SELECT * as part from lineitem;"

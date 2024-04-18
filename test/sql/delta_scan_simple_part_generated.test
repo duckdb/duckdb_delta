@@ -1,0 +1,23 @@
+# name: test/sql/delta_scan_simple_part_generated.test
+# description: test deltatable extension
+# group: [deltatable]
+
+require parquet
+
+require deltatable
+
+require-env GENERATED_DATA_AVAILABLE
+
+query II
+from delta_scan('data/generated/simple_partitioned/delta_lake');
+----
+0	0
+2	0
+4	0
+6	0
+8	0
+1	1
+3	1
+5	1
+7	1
+9	1

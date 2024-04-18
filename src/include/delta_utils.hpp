@@ -198,6 +198,16 @@ ffi::KernelStringSlice to_delta_string_slice(const string &str) {
     return {str.data(), str.size()};
 }
 
+string from_delta_string_slice(const struct ffi::KernelStringSlice slice) {
+    return {slice.ptr, slice.len};
+}
+
+vector<bool> from_delta_bool_slice(const struct ffi::KernelBoolSlice slice) {
+    vector<bool> result;
+    result.assign(slice.ptr, slice.ptr + slice.len);
+    return result;
+}
+
 // Template wrapper function that implements get_next for EngineIteratorFromCallable.
 template <typename Callable>
 static auto GetNextFromCallable(Callable* callable) -> decltype(std::declval<Callable>()()) {
