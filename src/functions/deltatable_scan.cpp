@@ -202,8 +202,9 @@ void DeltaMultiFileReader::FinalizeBind(const MultiFileReaderOptions &file_optio
         // Add any constants from the Delta metadata to the reader partition map
         auto file_metadata = custom_bind_data.current_snapshot.metadata.find(filename);
         if (file_metadata != custom_bind_data.current_snapshot.metadata.end() && !file_metadata->second.partition_map.empty()) {
-            for (idx_t i = 0; i < global_names.size(); i++) {
-                auto col_partition_entry = file_metadata->second.partition_map.find(global_names[i]);
+            for (idx_t i = 0; i < global_column_ids.size(); i++) {
+                column_t col_id = global_column_ids[i];
+                auto col_partition_entry = file_metadata->second.partition_map.find(global_names[col_id]);
                 if (col_partition_entry != file_metadata->second.partition_map.end()) {
                     // Todo: use https://github.com/delta-io/delta/blob/master/PROTOCOL.md#partition-value-serialization
                     auto maybe_value = Value(col_partition_entry->second).DefaultCastAs(global_types[i]);
