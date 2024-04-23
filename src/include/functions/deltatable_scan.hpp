@@ -40,6 +40,8 @@ struct DeltaTableSnapshot : public MultiFileList {
         return metadata[path];
     };
 
+    const vector<string> GetPaths() override;
+
 protected:
     // TODO: How to guarantee we only call this after the filter pushdown?
     void InitializeFiles();

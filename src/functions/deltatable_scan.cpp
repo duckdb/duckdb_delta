@@ -101,6 +101,10 @@ void DeltaTableSnapshot::Bind(vector<LogicalType> &return_types, vector<string> 
     this->names = names;
 }
 
+const vector<string> DeltaTableSnapshot::GetPaths() {
+    return {path};
+}
+
 string DeltaTableSnapshot::GetFile(idx_t i) {
     if (!initialized) {
         InitializeFiles();
