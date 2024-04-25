@@ -25,7 +25,7 @@ struct DeltaFileMetaData {
 
 //! The DeltaTableSnapshot implements the MultiFileList API to allow injecting it into the regular DuckDB parquet scan
 struct DeltaTableSnapshot : public MultiFileList {
-    explicit DeltaTableSnapshot(const string &path);
+    DeltaTableSnapshot(ClientContext &context, const string &path);
 
     //! MultiFileList API
     string GetFile(idx_t i) override;
@@ -40,7 +40,7 @@ struct DeltaTableSnapshot : public MultiFileList {
         return metadata[path];
     };
 
-    const vector<string> GetPaths() override;
+    vector<string> GetPaths() override;
 
 protected:
     // TODO: How to guarantee we only call this after the filter pushdown?
@@ -58,7 +58,6 @@ public:
     ffi::Scan* scan;
     ffi::GlobalScanState *global_state;
     UniqueKernelPointer <ffi::KernelScanDataIterator> scan_data_iterator;
-    UniqueKernelPointer <ffi::KernelScanFileIterator> files; // Deprecated
 
     //! Names
     vector<string> names;

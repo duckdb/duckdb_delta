@@ -12,6 +12,8 @@
 #include "duckdb/parser/parsed_expression.hpp"
 #include "duckdb/execution/expression_executor.hpp"
 #include "duckdb/planner/binder.hpp"
+#include "duckdb/main/secret/secret_manager.hpp"
+
 
 #include <string>
 #include <numeric>
@@ -71,12 +73,66 @@ static void visit_data(void *engine_context, struct ffi::EngineDataHandle *engin
     ffi::visit_scan_data(engine_data, selection_vec, engine_context, visit_callback);
 }
 
-DeltaTableSnapshot::DeltaTableSnapshot(const string &path) : path(path) {
+static ffi::EngineInterfaceBuilder* CreateBuilder(ClientContext &context, const string &path) {
+    ffi::EngineInterfaceBuilder* builder;
+
+    // For "regular" paths we early out with the default builder config
+    if (!StringUtil::StartsWith(path, "s3://")) {
+        auto interface_builder_res = ffi::get_engine_interface_builder(to_delta_string_slice(path), error_allocator);
+        return unpack_result_or_throw(interface_builder_res, "get_engine_interface_builder for path " + path);
+    }
+
+    auto end_of_container = path.find('/',5);
+
+    if(end_of_container == string::npos) {
+        throw IOException("Invalid s3 url passed to delta scan: %s", path);
+    }
+    auto bucket = path.substr(5, end_of_container-5);
+    auto path_in_bucket = path.substr(end_of_container);
+
+    auto interface_builder_res = ffi::get_engine_interface_builder(to_delta_string_slice(path), error_allocator);
+    builder = unpack_result_or_throw(interface_builder_res, "get_engine_interface_builder for path " + path);
+
+    ffi::set_builder_option(builder, to_delta_string_slice("aws_bucket"), to_delta_string_slice(bucket));
+
+    // For S3 paths we need to trim the url, set the container, and fetch a potential secret
+    auto &secret_manager = SecretManager::Get(context);
+    auto transaction = CatalogTransaction::GetSystemCatalogTransaction(context);
+
+    auto secret_match = secret_manager.LookupSecret(transaction, path, "s3");
+
+    // No secret: nothing left to do here!
+    if (!secret_match.HasMatch()) {
+        return builder;
+    }
+    const auto &kv_secret = dynamic_cast<const KeyValueSecret &>(*secret_match.secret_entry->secret);
+
+    auto key_id = kv_secret.TryGetValue("key_id");
+    auto secret = kv_secret.TryGetValue("secret");
+    auto region = kv_secret.TryGetValue("region");
+    auto endpoint = kv_secret.TryGetValue("endpoint");
+    auto session_token = kv_secret.TryGetValue("session_token");
+
+    ffi::set_builder_option(builder, to_delta_string_slice("aws_access_key_id"), to_delta_string_slice(key_id.ToString()));
+    ffi::set_builder_option(builder, to_delta_string_slice("aws_secret_access_key"), to_delta_string_slice(secret.ToString()));
+    ffi::set_builder_option(builder, to_delta_string_slice("aws_region"), to_delta_string_slice(region.ToString()));
+    ffi::set_builder_option(builder, to_delta_string_slice("aws_endpoint"), to_delta_string_slice(endpoint.ToString()));
+    ffi::set_builder_option(builder, to_delta_string_slice("aws_session_token"), to_delta_string_slice(session_token.ToString()));
+
+    return builder;
+}
+
+DeltaTableSnapshot::DeltaTableSnapshot(ClientContext &context, const string &path) : MultiFileList(), path(path) {
     auto path_slice = to_delta_string_slice(path);
 
-    // Initialize Table Client
-    auto table_client_res = ffi::get_default_client(path_slice, error_allocator);
-    table_client = unpack_result_or_throw(table_client_res, "get_default_client in DeltaScanScanBind");
+    auto interface_builder = CreateBuilder(context, path);
+
+    auto engine_interface_res = ffi::builder_build(interface_builder);
+    table_client = unpack_result_or_throw(engine_interface_res, "get_default_client in DeltaScanScanBind");
+
+    // Alternatively we can do the default client like so:
+//    auto table_client_res = ffi::get_default_client(path_slice, error_allocator);
+//    table_client = unpack_result_or_throw(table_client_res, "get_default_client in DeltaScanScanBind");
 
     // Initialize Snapshot
     auto snapshot_res = ffi::snapshot(path_slice, table_client);
@@ -101,7 +157,7 @@ void DeltaTableSnapshot::Bind(vector<LogicalType> &return_types, vector<string> 
     this->names = names;
 }
 
-const vector<string> DeltaTableSnapshot::GetPaths() {
+vector<string> DeltaTableSnapshot::GetPaths() {
     return {path};
 }
 
@@ -225,7 +281,7 @@ unique_ptr<MultiFileList> DeltaMultiFileReader::GetFileList(ClientContext &conte
         throw BinderException("'delta_scan' only supports single path");
     }
 
-    return make_uniq<DeltaTableSnapshot>(input.GetValue<string>());
+    return make_uniq<DeltaTableSnapshot>(context, input.GetValue<string>());
 }
 
 static SelectionVector DuckSVFromDeltaSV(ffi::KernelBoolSlice *dv, idx_t offset, idx_t count, idx_t &select_count, idx_t &skip_count) {

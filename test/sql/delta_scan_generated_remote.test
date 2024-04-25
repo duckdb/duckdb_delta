@@ -1,0 +1,55 @@
+# name: test/sql/delta_scan_generated_remote.test
+# description: test delta scan on remote data using secret
+# group: [deltatable]
+
+require parquet
+
+require httpfs
+
+require aws
+
+require deltatable
+
+require-env GENERATED_S3_DATA_AVAILABLE
+
+statement ok
+CREATE SECRET s3_1 (TYPE S3, PROVIDER credential_chain)
+
+query I
+FROM GLOB("s3://test-bucket-ceiveran/delta_testing/lineitem_modified_sf0.01/delta_lake/**/*.*") ORDER BY ALL LIMIT 5
+----
+s3://test-bucket-ceiveran/delta_testing/lineitem_modified_sf0.01/delta_lake/_delta_log/00000000000000000000.json
+s3://test-bucket-ceiveran/delta_testing/lineitem_modified_sf0.01/delta_lake/part=0/0-04647b1a-cc48-4625-a647-208514dc22cc-0.parquet
+s3://test-bucket-ceiveran/delta_testing/lineitem_modified_sf0.01/delta_lake/part=1/0-04647b1a-cc48-4625-a647-208514dc22cc-0.parquet
+s3://test-bucket-ceiveran/delta_testing/lineitem_modified_sf0.01/delta_lake/part=2/0-04647b1a-cc48-4625-a647-208514dc22cc-0.parquet
+s3://test-bucket-ceiveran/delta_testing/lineitem_modified_sf0.01/delta_lake/part=3/0-04647b1a-cc48-4625-a647-208514dc22cc-0.parquet
+
+# Ensure we can query part of delta table
+statement ok
+SELECT COUNT(*) FROM "s3://test-bucket-ceiveran/delta_testing/lineitem_modified_sf0.01/delta_lake/part=0/0-04647b1a-cc48-4625-a647-208514dc22cc-0.parquet"
+
+query I rowsort q1
+SELECT
+    part, sum(l_extendedprice * l_discount) AS revenue
+FROM
+    delta_scan('s3://test-bucket-ceiveran/delta_testing/lineitem_modified_sf0.01/delta_lake')
+WHERE
+    l_shipdate::date >= CAST('1994-01-01' AS date)
+  AND l_shipdate::date < CAST('1995-01-01' AS date)
+  AND l_discount BETWEEN 5 AND 7
+  AND l_quantity < 2400
+GROUP BY part;
+----
+
+query I rowsort q1
+SELECT
+    part, sum(l_extendedprice * l_discount) AS revenue
+FROM
+    parquet_scan('data/generated/lineitem_modified_sf0.01/duckdb/**/*.parquet')
+WHERE
+    l_shipdate::date >= CAST('1994-01-01' AS date)
+  AND l_shipdate::date < CAST('1995-01-01' AS date)
+  AND l_discount BETWEEN 5 AND 7
+  AND l_quantity < 2400
+GROUP BY part;
+----
