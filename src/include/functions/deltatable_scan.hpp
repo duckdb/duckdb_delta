@@ -28,19 +28,18 @@ struct DeltaTableSnapshot : public MultiFileList {
     DeltaTableSnapshot(ClientContext &context, const string &path);
 
     //! MultiFileList API
-    string GetFile(idx_t i) override;
-    bool ComplexFilterPushdown(ClientContext &context, const MultiFileReaderOptions &options, LogicalGet &get,
-                               vector<unique_ptr<Expression>> &filters) override;
+public:
     void Bind(vector<LogicalType> &return_types, vector<string> &names);
+    unique_ptr<MultiFileList> ComplexFilterPushdown(ClientContext &context,
+                                                            const MultiFileReaderOptions &options, LogicalGet &get,
+                                                            vector<unique_ptr<Expression>> &filters) override;
+    vector<string> GetAllFiles() override;
+    FileExpandResult GetExpandResult() override;
+    idx_t GetTotalFileCount() override;
 
-
-    //! Demo function for testing; to be replaced and potentially baseclassed in duckdb (for usage in statistics, progress
-    //! calculation etc)
-    DeltaFileMetaData& GetFileMetadata(const string &path) {
-        return metadata[path];
-    };
-
-    vector<string> GetPaths() override;
+protected:
+    //! Get the i-th expanded file
+    string GetFile(idx_t i) override;
 
 protected:
     // TODO: How to guarantee we only call this after the filter pushdown?
@@ -63,10 +62,11 @@ public:
     vector<string> names;
 
     //! Metadata map for files
-    case_insensitive_map_t<DeltaFileMetaData> metadata;
+    vector<DeltaFileMetaData> metadata;
 
     //! Current file list resolution state
     bool initialized = false;
+    bool files_exhausted = false;
     vector<string> resolved_files;
     TableFilterSet table_filters;
 };
@@ -74,8 +74,8 @@ public:
 struct DeltaMultiFileReader : public MultiFileReader {
     static unique_ptr<MultiFileReader> CreateInstance();
     //! Return a DeltaTableSnapshot
-    unique_ptr<MultiFileList> GetFileList(ClientContext &context, const Value &input, const string &name,
-                                          FileGlobOptions options = FileGlobOptions::DISALLOW_EMPTY) override;
+    unique_ptr<MultiFileList> CreateFileList(ClientContext &context, const vector<string> &paths,
+                   FileGlobOptions options = FileGlobOptions::DISALLOW_EMPTY) override;
 
     //! Override the regular parquet bind using the MultiFileReader Bind. The bind from these are what DuckDB's file
     //! readers will try read
@@ -93,22 +93,22 @@ struct DeltaMultiFileReader : public MultiFileReader {
                                        ClientContext &context) override;
     //! Override the FinalizeChunk method
     void FinalizeChunk(ClientContext &context, const MultiFileReaderBindData &bind_data,
-                       const MultiFileReaderData &reader_data, DataChunk &chunk, const string &filename) override;
+                       const MultiFileReaderData &reader_data, DataChunk &chunk) override;
 
     //! Override the ParseOption call to parse delta_scan specific options
     bool ParseOption(const string &key, const Value &val, MultiFileReaderOptions &options,
                                         ClientContext &context) override;
 };
 
-struct DeltaMultiFileReaderBindData : public CustomMultiFileReaderBindData {
-
-    DeltaMultiFileReaderBindData(DeltaTableSnapshot& delta_table_snapshot);
-
-    //! The current MultiFileList
-    DeltaTableSnapshot& current_snapshot;
-
-    //! Bind data for demo generated column option
-    idx_t file_number_column_idx = DConstants::INVALID_INDEX;
-};
+//struct DeltaMultiFileReaderBindData {
+//
+//    DeltaMultiFileReaderBindData(DeltaTableSnapshot& delta_table_snapshot);
+//
+//    //! The current MultiFileList
+//    DeltaTableSnapshot& current_snapshot;
+//
+//    //! Bind data for demo generated column option
+//    idx_t file_number_column_idx = DConstants::INVALID_INDEX;
+//};
 
 } // namespace duckdb
