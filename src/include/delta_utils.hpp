@@ -140,6 +140,7 @@ static const char* KernelErrorEnumStrings[] = {
         "ParquetError",
         "ObjectStoreError",
         "ObjectStorePathError",
+        "Reqwest",
         "FileNotFoundError",
         "MissingColumnError",
         "UnexpectedColumnTypeError",

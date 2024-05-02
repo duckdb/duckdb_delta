@@ -47,7 +47,8 @@ static void visit_callback(void* engine_context, const struct ffi::KernelStringS
     context->metadata[path_string].file_number = context->resolved_files.size() - 1;
 
     // Fetch the deletion vector
-    ffi::KernelBoolSlice *selection_vector = ffi::selection_vector_from_dv(dv_info, context->table_client, context->global_state);
+    auto selection_vector_res = ffi::selection_vector_from_dv(dv_info, context->table_client, context->global_state);
+    auto selection_vector = unpack_result_or_throw(selection_vector_res, "selection_vector_from_dv for path " + context->path);
     if (selection_vector) {
         context->metadata[path_string].selection_vector = {selection_vector, ffi::drop_bool_slice};
     }
@@ -93,7 +94,7 @@ static ffi::EngineInterfaceBuilder* CreateBuilder(ClientContext &context, const 
     auto interface_builder_res = ffi::get_engine_interface_builder(to_delta_string_slice(path), error_allocator);
     builder = unpack_result_or_throw(interface_builder_res, "get_engine_interface_builder for path " + path);
 
-    ffi::set_builder_option(builder, to_delta_string_slice("aws_bucket"), to_delta_string_slice(bucket));
+//    ffi::set_builder_option(builder, to_delta_string_slice("aws_bucket"), to_delta_string_slice(bucket));
 
     // For S3 paths we need to trim the url, set the container, and fetch a potential secret
     auto &secret_manager = SecretManager::Get(context);
@@ -116,8 +117,6 @@ static ffi::EngineInterfaceBuilder* CreateBuilder(ClientContext &context, const 
     ffi::set_builder_option(builder, to_delta_string_slice("aws_access_key_id"), to_delta_string_slice(key_id.ToString()));
     ffi::set_builder_option(builder, to_delta_string_slice("aws_secret_access_key"), to_delta_string_slice(secret.ToString()));
     ffi::set_builder_option(builder, to_delta_string_slice("aws_region"), to_delta_string_slice(region.ToString()));
-    ffi::set_builder_option(builder, to_delta_string_slice("aws_endpoint"), to_delta_string_slice(endpoint.ToString()));
-    ffi::set_builder_option(builder, to_delta_string_slice("aws_session_token"), to_delta_string_slice(session_token.ToString()));
 
     return builder;
 }
@@ -131,8 +130,8 @@ DeltaTableSnapshot::DeltaTableSnapshot(ClientContext &context, const string &pat
     table_client = unpack_result_or_throw(engine_interface_res, "get_default_client in DeltaScanScanBind");
 
     // Alternatively we can do the default client like so:
-//    auto table_client_res = ffi::get_default_client(path_slice, error_allocator);
-//    table_client = unpack_result_or_throw(table_client_res, "get_default_client in DeltaScanScanBind");
+    auto table_client_res = ffi::get_default_client(path_slice, error_allocator);
+    table_client = unpack_result_or_throw(table_client_res, "get_default_client in DeltaScanScanBind");
 
     // Initialize Snapshot
     auto snapshot_res = ffi::snapshot(path_slice, table_client);

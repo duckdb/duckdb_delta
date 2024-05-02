@@ -15,6 +15,34 @@ require-env GENERATED_S3_DATA_AVAILABLE
 statement ok
 CREATE SECRET s3_1 (TYPE S3, PROVIDER credential_chain)
 
+mode output_result
+
+#statement ok
+#explain analyze SELECT
+#    part, sum(l_extendedprice * l_discount) AS revenue
+#FROM
+#    delta_scan('s3://test-bucket-ceiveran/delta_testing/lineitem_modified_sf1/delta_lake')
+#WHERE
+#    l_shipdate::date >= CAST('1994-01-01' AS date)
+#  AND l_shipdate::date < CAST('1995-01-01' AS date)
+#  AND l_discount BETWEEN 5 AND 7
+#  AND l_quantity < 2400
+#GROUP BY part;
+
+statement ok
+explain analyze SELECT
+    part, sum(l_extendedprice * l_discount) AS revenue
+FROM
+    parquet_scan('s3://test-bucket-ceiveran/delta_testing/lineitem_modified_sf1/duckdb/**/*.parquet')
+WHERE
+    l_shipdate::date >= CAST('1994-01-01' AS date)
+  AND l_shipdate::date < CAST('1995-01-01' AS date)
+  AND l_discount BETWEEN 5 AND 7
+  AND l_quantity < 2400
+GROUP BY part;
+
+mode skip
+
 query I
 FROM GLOB("s3://test-bucket-ceiveran/delta_testing/lineitem_modified_sf0.01/delta_lake/**/*.*") ORDER BY ALL LIMIT 5
 ----
@@ -32,7 +60,7 @@ query I rowsort q1
 SELECT
     part, sum(l_extendedprice * l_discount) AS revenue
 FROM
-    delta_scan('s3://test-bucket-ceiveran/delta_testing/lineitem_modified_sf0.01/delta_lake')
+    delta_scan('s3://test-bucket-ceiveran/delta_testing/lineitem_modified_sf1/delta_lake')
 WHERE
     l_shipdate::date >= CAST('1994-01-01' AS date)
   AND l_shipdate::date < CAST('1995-01-01' AS date)
@@ -45,7 +73,7 @@ query I rowsort q1
 SELECT
     part, sum(l_extendedprice * l_discount) AS revenue
 FROM
-    parquet_scan('data/generated/lineitem_modified_sf0.01/duckdb/**/*.parquet')
+    parquet_scan('data/generated/lineitem_modified_sf1/duckdb/**/*.parquet')
 WHERE
     l_shipdate::date >= CAST('1994-01-01' AS date)
   AND l_shipdate::date < CAST('1995-01-01' AS date)

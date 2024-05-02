@@ -91,8 +91,12 @@ def generate_test_data(path, query, part_column=False):
 # query = "call dbgen(sf=1);"
 # query += f"CREATE table test_table AS SELECT *, l_orderkey%10 as part from ({modified_lineitem_query});"
 # generate_test_data("lineitem_modified_sf1", query, "part")
+#
+# ### Lineitem_modified SF10
+# query = "call dbgen(sf=10);"
+# query += f"CREATE table test_table AS SELECT *, l_orderkey%10 as part from ({modified_lineitem_query});"
+# generate_test_data("lineitem_modified_sf10", query, "part")
 
-### Lineitem_modified SF10
-query = "call dbgen(sf=10);"
-query += f"CREATE table test_table AS SELECT *, l_orderkey%10 as part from ({modified_lineitem_query});"
-generate_test_data("lineitem_modified_sf10", query, "part")
+### Simple partitioned table with structs
+query = "CREATE table test_table AS SELECT {'i':i, 'j':i+1} as value, i%2 as part from range(0,10) tbl(i);"
+generate_test_data("simple_partitioned_with_structs", query, "part");
