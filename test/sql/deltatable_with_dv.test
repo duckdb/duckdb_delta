@@ -8,7 +8,7 @@ require deltatable
 
 # Simplest example
 query I
-SELECT * FROM delta_scan('delta-kernel-rs/kernel/tests/data/table-with-dv-small')
+FROM delta_scan('file:///Users/sam/Development/delta-kernel-testing/delta-kernel-rs/kernel/tests/data/table-with-dv-small/')
 ----
 1
 2
@@ -19,4 +19,17 @@ SELECT * FROM delta_scan('delta-kernel-rs/kernel/tests/data/table-with-dv-small'
 7
 8
 
+# With filter: ensures the deletion vector is applied properly on top of pushed down filters
+query I
+FROM delta_scan('file:///Users/sam/Development/delta-kernel-testing/delta-kernel-rs/kernel/tests/data/table-with-dv-small/')
+WHERE value > 3
+----
+4
+5
+6
+7
+8
+
 # TODO: test with laaarge data with dv's
+# TODO: test with delta_file_number option
+# TODO: test with file_row_number option: ensure we don't enable the extra DataChunk reference step in the parquet scanner

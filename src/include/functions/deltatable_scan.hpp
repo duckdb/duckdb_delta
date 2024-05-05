@@ -26,6 +26,8 @@ struct DeltaFileMetaData {
 //! The DeltaTableSnapshot implements the MultiFileList API to allow injecting it into the regular DuckDB parquet scan
 struct DeltaTableSnapshot : public MultiFileList {
     DeltaTableSnapshot(ClientContext &context, const string &path);
+    string GetPath();
+    static string CleanPath(const string &raw_path);
 
     //! MultiFileList API
 public:
@@ -47,8 +49,6 @@ protected:
 
 // TODO: change back to protected
 public:
-    //! Table Info
-    string path;
     idx_t version;
 
     //! Delta Kernel Structures
@@ -69,13 +69,15 @@ public:
     bool files_exhausted = false;
     vector<string> resolved_files;
     TableFilterSet table_filters;
+
+    ClientContext &context;
 };
 
 struct DeltaMultiFileReader : public MultiFileReader {
     static unique_ptr<MultiFileReader> CreateInstance();
     //! Return a DeltaTableSnapshot
     unique_ptr<MultiFileList> CreateFileList(ClientContext &context, const vector<string> &paths,
-                   FileGlobOptions options = FileGlobOptions::DISALLOW_EMPTY) override;
+                   FileGlobOptions options) override;
 
     //! Override the regular parquet bind using the MultiFileReader Bind. The bind from these are what DuckDB's file
     //! readers will try read
@@ -91,6 +93,7 @@ struct DeltaMultiFileReader : public MultiFileReader {
                                        const vector<LogicalType> &global_types, const vector<string> &global_names,
                                        const vector<column_t> &global_column_ids, MultiFileReaderData &reader_data,
                                        ClientContext &context) override;
+
     //! Override the FinalizeChunk method
     void FinalizeChunk(ClientContext &context, const MultiFileReaderBindData &bind_data,
                        const MultiFileReaderData &reader_data, DataChunk &chunk) override;
@@ -99,16 +102,5 @@ struct DeltaMultiFileReader : public MultiFileReader {
     bool ParseOption(const string &key, const Value &val, MultiFileReaderOptions &options,
                                         ClientContext &context) override;
 };
-
-//struct DeltaMultiFileReaderBindData {
-//
-//    DeltaMultiFileReaderBindData(DeltaTableSnapshot& delta_table_snapshot);
-//
-//    //! The current MultiFileList
-//    DeltaTableSnapshot& current_snapshot;
-//
-//    //! Bind data for demo generated column option
-//    idx_t file_number_column_idx = DConstants::INVALID_INDEX;
-//};
 
 } // namespace duckdb

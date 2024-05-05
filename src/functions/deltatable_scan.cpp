@@ -32,12 +32,12 @@ static void* allocate_string(const struct ffi::KernelStringSlice slice) {
 
 static void visit_callback(ffi::NullableCvoid engine_context, const struct ffi::KernelStringSlice path, int64_t size, const ffi::DvInfo *dv_info, struct ffi::CStringMap *partition_values) {
     auto context = (DeltaTableSnapshot *) engine_context;
-    auto path_string =  context->path + "/" + from_delta_string_slice(path);
+    auto path_string =  context->GetPath() + "/" + from_delta_string_slice(path);
 
-//    printf("Fetch metadata for %s\n", path_string.c_str());
+    printf("Fetch metadata for %s\n", path_string.c_str());
 
     // First we append the file to our resolved files
-    context->resolved_files.push_back(path_string);
+    context->resolved_files.push_back(DeltaTableSnapshot::CleanPath(path_string));
     context->metadata.push_back({});
 
     D_ASSERT(context->resolved_files.size() == context->metadata.size());
@@ -48,7 +48,7 @@ static void visit_callback(ffi::NullableCvoid engine_context, const struct ffi::
 
     // Fetch the deletion vector
     auto selection_vector_res = ffi::selection_vector_from_dv(dv_info, context->table_client, context->global_state);
-    auto selection_vector = unpack_result_or_throw(selection_vector_res, "selection_vector_from_dv for path " + context->path);
+    auto selection_vector = unpack_result_or_throw(selection_vector_res, "selection_vector_from_dv for path " + context->GetPath());
     if (selection_vector) {
         context->metadata.back().selection_vector = {selection_vector, ffi::drop_bool_slice};
     }
@@ -121,31 +121,24 @@ static ffi::EngineInterfaceBuilder* CreateBuilder(ClientContext &context, const 
     return builder;
 }
 
-DeltaTableSnapshot::DeltaTableSnapshot(ClientContext &context, const string &path) : MultiFileList({path}, FileGlobOptions::ALLOW_EMPTY) {
-    auto path_slice = to_delta_string_slice(path);
+DeltaTableSnapshot::DeltaTableSnapshot(ClientContext &context_p, const string &path) : MultiFileList({path}, FileGlobOptions::ALLOW_EMPTY), context(context_p) {
+}
 
-    auto interface_builder = CreateBuilder(context, path);
-    auto engine_interface_res = ffi::builder_build(interface_builder);
-    table_client = unpack_result_or_throw(engine_interface_res, "get_default_client in DeltaScanScanBind");
+string DeltaTableSnapshot::GetPath() {
+    return GetPaths()[0];
+}
 
-    // Alternatively we can do the default client like so:
-//    auto table_client_res = ffi::get_default_client(path_slice, error_allocator);
-//    table_client = unpack_result_or_throw(table_client_res, "get_default_client in DeltaScanScanBind");
-
-    // Initialize Snapshot
-    auto snapshot_res = ffi::snapshot(path_slice, table_client);
-    snapshot = unpack_result_or_throw(snapshot_res, "snapshot in DeltaScanScanBind");
-
-    auto scan_res = ffi::scan(snapshot, table_client, nullptr);
-    scan = unpack_result_or_throw(scan_res, "scan in DeltaScanScanBind");
-
-    global_state = ffi::get_global_scan_state(scan);
-
-    // Set version
-    this->version = ffi::version(snapshot);
+string DeltaTableSnapshot::CleanPath(const string &raw_path) {
+    if (StringUtil::StartsWith(raw_path, "file://")) {
+        return raw_path.substr(7);
+    }
+    return raw_path;
 }
 
 void DeltaTableSnapshot::Bind(vector<LogicalType> &return_types, vector<string> &names) {
+    if (!initialized) {
+        InitializeFiles();
+    }
     auto schema = SchemaVisitor::VisitSnapshotSchema(snapshot);
     for (const auto &field: *schema) {
         names.push_back(field.first);
@@ -169,11 +162,22 @@ string DeltaTableSnapshot::GetFile(idx_t i) {
     }
 
     while(i >= resolved_files.size()) {
+        auto size_before = resolved_files.size();
+
         auto have_scan_data_res = ffi::kernel_scan_data_next(scan_data_iterator.get(), this, visit_data);
+
+        // TODO: weird workaround required to not get "Json error: Encountered unexpected 'c' whilst parsing value"
+        if (have_scan_data_res.tag == ffi::ExternResult<bool>::Tag::Err) {
+            if (have_scan_data_res.err._0) {
+                files_exhausted = true;
+                return "";
+            }
+        }
+
         auto have_scan_data = unpack_result_or_throw(have_scan_data_res, "kernel_scan_data_next in DeltaTableSnapshot GetFile");
 
         // TODO: shouldn't the kernel always return false here?
-        if (!have_scan_data || resolved_files.size() == i) {
+        if (!have_scan_data || resolved_files.size() == size_before) {
             files_exhausted = true;
             return "";
         }
@@ -188,13 +192,36 @@ string DeltaTableSnapshot::GetFile(idx_t i) {
 }
 
 void DeltaTableSnapshot::InitializeFiles() {
+    auto path_slice = to_delta_string_slice(paths[0]);
+
+    auto interface_builder = CreateBuilder(context, paths[0]);
+    auto engine_interface_res = ffi::builder_build(interface_builder);
+    table_client = unpack_result_or_throw(engine_interface_res, "get_default_client in DeltaScanScanBind");
+
+    // Alternatively we can do the default client like so:
+//    auto table_client_res = ffi::get_default_client(path_slice, error_allocator);
+//    table_client = unpack_result_or_throw(table_client_res, "get_default_client in DeltaScanScanBind");
+
+    // Initialize Snapshot
+    auto snapshot_res = ffi::snapshot(path_slice, table_client);
+    snapshot = unpack_result_or_throw(snapshot_res, "snapshot in DeltaScanScanBind");
+
     PredicateVisitor visitor(names, &table_filters);
+
+    auto scan_res = ffi::scan(snapshot, table_client, &visitor);
+    scan = unpack_result_or_throw(scan_res, "scan in DeltaScanScanBind");
+
+    global_state = ffi::get_global_scan_state(scan);
+
+    // Set version
+    this->version = ffi::version(snapshot);
 
     auto scan_iterator_res = ffi::kernel_scan_data_init(table_client, scan);
     scan_data_iterator = {
             unpack_result_or_throw(scan_iterator_res, "kernel_scan_data_init in InitFiles"),
             ffi::kernel_scan_data_free
     };
+
     initialized = true;
 }
 
@@ -256,24 +283,33 @@ bool DeltaMultiFileReader::Bind(MultiFileReaderOptions &options, MultiFileList &
 
     delta_table_snapshot.Bind(return_types, names);
 
+    // If deletion vector present, we need to force the parquet readers to emit row-ids and pass the snapshot through
+    // the custom bind data
+    bind_data.file_row_number_idx = names.size();
+    bind_data.multi_file_reader_needs_file_row_number = true;
+
     return true;
 };
 
 void DeltaMultiFileReader::BindOptions(MultiFileReaderOptions &options, MultiFileList &files,
                  vector<LogicalType> &return_types, vector<string> &names, MultiFileReaderBindData& bind_data) {
+
+    // Disable all other multifilereader options
+    options.auto_detect_hive_partitioning = false;
+    options.hive_partitioning = false;
+    options.union_by_name = false;
+
     MultiFileReader::BindOptions(options, files, return_types, names, bind_data);
 
-    //! TODO figure out state passing
-//    auto custom_bind_data = make_uniq<DeltaMultiFileReaderBindData>(dynamic_cast<DeltaTableSnapshot&>(files));
-//
-//    auto demo_gen_col_opt = options.custom_options.find("delta_file_number");
-//    if (demo_gen_col_opt != options.custom_options.end()) {
-//        custom_bind_data->file_number_column_idx = names.size();
-//        names.push_back("delta_file_number");
-//        return_types.push_back(LogicalType::UBIGINT);
-//    }
-//
-//    bind_data.custom_data = std::move(custom_bind_data);
+    auto demo_gen_col_opt = options.custom_options.find("delta_file_number");
+    if (demo_gen_col_opt != options.custom_options.end()) {
+        if (demo_gen_col_opt->second.GetValue<bool>()) {
+            D_ASSERT(bind_data.custom_data.find("file_number_column_idx") == bind_data.custom_data.end());
+            bind_data.custom_data["file_number_column_idx"] = Value::UBIGINT(names.size());
+            names.push_back("delta_file_number");
+            return_types.push_back(LogicalType::UBIGINT);
+        }
+    }
 }
 
 void DeltaMultiFileReader::FinalizeBind(const MultiFileReaderOptions &file_options, const MultiFileReaderBindData &options,
@@ -283,29 +319,37 @@ void DeltaMultiFileReader::FinalizeBind(const MultiFileReaderOptions &file_optio
                   ClientContext &context) {
     MultiFileReader::FinalizeBind(file_options, options, filename, local_names, global_types, global_names, global_column_ids, reader_data, context);
 
+    // Handle custom delta option set in MultiFileReaderOptions::custom_options with data passed through in MultiFileReaderBindData::custom_data
+    auto file_number_opt = file_options.custom_options.find("delta_file_number");
+    if (file_number_opt != file_options.custom_options.end()) {
+        if (file_number_opt->second.GetValue<bool>()) {
+            auto maybe_file_number_column = options.custom_data.find("file_number_column_idx");
+            D_ASSERT(maybe_file_number_column != options.custom_data.end());
+            auto file_number_column_idx = maybe_file_number_column->second.GetValue<int64_t>();
+            D_ASSERT(file_number_column_idx != DConstants::INVALID_INDEX);
 
-    // TODO figure out state passing
-//    if (options.custom_data) {
-//        auto &custom_bind_data = dynamic_cast<DeltaMultiFileReaderBindData&>(*options.custom_data);
-//        if (custom_bind_data.file_number_column_idx != DConstants::INVALID_INDEX) {
-//            // TODO: remove the need for a placeholder here?
-//            reader_data.constant_map.emplace_back(custom_bind_data.file_number_column_idx, Value::UBIGINT(0));
-//        }
-//
-//        // Add any constants from the Delta metadata to the reader partition map
-//        auto file_metadata = custom_bind_data.current_snapshot.metadata.find(filename);
-//        if (file_metadata != custom_bind_data.current_snapshot.metadata.end() && !file_metadata->second.partition_map.empty()) {
-//            for (idx_t i = 0; i < global_column_ids.size(); i++) {
-//                column_t col_id = global_column_ids[i];
-//                auto col_partition_entry = file_metadata->second.partition_map.find(global_names[col_id]);
-//                if (col_partition_entry != file_metadata->second.partition_map.end()) {
-//                    // Todo: use https://github.com/delta-io/delta/blob/master/PROTOCOL.md#partition-value-serialization
-//                    auto maybe_value = Value(col_partition_entry->second).DefaultCastAs(global_types[i]);
-//                    reader_data.constant_map.emplace_back(i, maybe_value);
-//                }
-//            }
-//        }
-//    }
+            // TODO: we have the metadata for the file available here already, the reason we handle this in FinalizeChunk
+            //       is purely for demonstration purposes
+            reader_data.constant_map.emplace_back(file_number_column_idx, Value::UBIGINT(0));
+        }
+    }
+
+    // Get the metadata for this file
+    D_ASSERT(reader_data.file_metadata.file_list);
+    const auto &snapshot = dynamic_cast<const DeltaTableSnapshot&>(*reader_data.file_metadata.file_list);
+    auto &file_metadata = snapshot.metadata[reader_data.file_metadata.file_list_idx];
+
+    if (!file_metadata.partition_map.empty()) {
+        for (idx_t i = 0; i < global_column_ids.size(); i++) {
+            column_t col_id = global_column_ids[i];
+            auto col_partition_entry = file_metadata.partition_map.find(global_names[col_id]);
+            if (col_partition_entry != file_metadata.partition_map.end()) {
+                // Todo: use https://github.com/delta-io/delta/blob/master/PROTOCOL.md#partition-value-serialization
+                auto maybe_value = Value(col_partition_entry->second).DefaultCastAs(global_types[i]);
+                reader_data.constant_map.emplace_back(i, maybe_value);
+            }
+        }
+    }
 }
 
 unique_ptr<MultiFileList> DeltaMultiFileReader::CreateFileList(ClientContext &context, const vector<string>& paths, FileGlobOptions options) {
@@ -316,23 +360,26 @@ unique_ptr<MultiFileList> DeltaMultiFileReader::CreateFileList(ClientContext &co
     return make_uniq<DeltaTableSnapshot>(context, paths[0]);
 }
 
-static SelectionVector DuckSVFromDeltaSV(ffi::KernelBoolSlice *dv, idx_t offset, idx_t count, idx_t &select_count, idx_t &skip_count) {
-    auto max_count = MinValue<idx_t>(count, dv->len - offset);
-    SelectionVector result {max_count};
+// Generate the correct Selection Vector Based on the Raw delta KernelBoolSlice dv and the row_id_column
+// TODO: benchmark this?
+static SelectionVector DuckSVFromDeltaSV(ffi::KernelBoolSlice *dv, Vector row_id_column, idx_t count, idx_t &select_count) {
+    D_ASSERT(row_id_column.GetType() == LogicalType::BIGINT);
 
-//    print_selection_vector(" cur: ", dv);
+    UnifiedVectorFormat data;
+    row_id_column.ToUnifiedFormat(count, data);
+    auto row_ids = UnifiedVectorFormat::GetData<int64_t>(data);
 
+    SelectionVector result {count};
     idx_t current_select = 0;
-    for (idx_t i = 0; i < max_count; i++) {
-        if (dv->ptr[i + offset]) {
+    for (idx_t i = 0; i < count; i++) {
+        auto row_id = row_ids[data.sel->get_index(i)];
+        if (dv->ptr[row_id]) {
             result.data()[current_select] = i;
             current_select++;
         }
     }
-    select_count = current_select;
-    skip_count = max_count - select_count;
 
-//    result.Print(select_count);
+    select_count = current_select;
 
     return result;
 }
@@ -341,52 +388,55 @@ void DeltaMultiFileReader::FinalizeChunk(ClientContext &context, const MultiFile
                    const MultiFileReaderData &reader_data, DataChunk &chunk) {
     // Base class finalization first
     MultiFileReader::FinalizeChunk(context, bind_data, reader_data, chunk);
+    chunk.Print();
 
-    // TODO: Fix by passing MultiFileList?
-//    if (bind_data.custom_data) {
-//        auto &custom_bind_data = dynamic_cast<DeltaMultiFileReaderBindData&>(*bind_data.custom_data);
-//        auto &metadata = custom_bind_data.current_snapshot.metadata[bind_data.filename_idx];
-//
-//        if (metadata.selection_vector.get() && chunk.size() != 0) {
-//            // Handle deletion vector
-//            idx_t select_count, skip_count;
-//            auto sv = DuckSVFromDeltaSV(metadata.selection_vector.get(), metadata.current_selection_vector_offset, STANDARD_VECTOR_SIZE, select_count, skip_count);
-//            metadata.current_selection_vector_offset += select_count + skip_count;
-//            chunk.Slice(sv, select_count);
-//        }
-//
-//        // Note: this demo function shows how we can use DuckDB's Binder create expression-based generated columns
-//        if (custom_bind_data.file_number_column_idx != DConstants::INVALID_INDEX) {
-//
-//            //! Create Dummy expression (0 + file_number)
-//            vector<unique_ptr<ParsedExpression>> child_expr;
-//            child_expr.push_back(make_uniq<ConstantExpression>(Value::UBIGINT(0)));
-//            child_expr.push_back(make_uniq<ConstantExpression>(Value::UBIGINT(metadata.file_number)));
-//            unique_ptr<ParsedExpression> expr = make_uniq<FunctionExpression>("+", std::move(child_expr), nullptr, nullptr, false, true);
-//
-//            //! s dummy expression
-//            auto binder = Binder::CreateBinder(context);
-//            ExpressionBinder expr_binder(*binder, context);
-//            auto bound_expr = expr_binder.Bind(expr, nullptr);
-//
-//            //! Execute dummy expression into result column
-//            ExpressionExecutor expr_executor(context);
-//            expr_executor.AddExpression(*bound_expr);
-//
-//            //! Execute the expression directly into the output Chunk
-//            expr_executor.ExecuteExpression(chunk.data[custom_bind_data.file_number_column_idx]);
-//        }
-//    }
+    D_ASSERT(reader_data.file_metadata.file_list);
+
+    // Get the metadata for this file
+    const auto &snapshot = dynamic_cast<const DeltaTableSnapshot&>(*reader_data.file_metadata.file_list);
+    auto &metadata = snapshot.metadata[reader_data.file_metadata.file_list_idx];
+
+    if (metadata.selection_vector.get() && chunk.size() != 0) {
+        idx_t select_count;
+
+        // Construct the selection vector using the file_row_number column and the raw selection vector from delta
+        auto sv = DuckSVFromDeltaSV(metadata.selection_vector.get(), chunk.data[bind_data.file_row_number_idx], chunk.size(), select_count);
+
+        // Slice the result
+        chunk.Slice(sv, select_count);
+    }
+
+    // Note: this demo function shows how we can use DuckDB's Binder create expression-based generated columns
+    auto maybe_file_number_column_idx = bind_data.custom_data.find("file_number_column_idx");
+    if (maybe_file_number_column_idx != bind_data.custom_data.end()) {
+        auto file_number_column_idx = maybe_file_number_column_idx->second.GetValue<int64_t>();
+        //! Create Dummy expression (0 + file_number)
+        vector<unique_ptr<ParsedExpression>> child_expr;
+        child_expr.push_back(make_uniq<ConstantExpression>(Value::UBIGINT(0)));
+        child_expr.push_back(make_uniq<ConstantExpression>(Value::UBIGINT(metadata.file_number)));
+        unique_ptr<ParsedExpression> expr = make_uniq<FunctionExpression>("+", std::move(child_expr), nullptr, nullptr, false, true);
+
+        //! s dummy expression
+        auto binder = Binder::CreateBinder(context);
+        ExpressionBinder expr_binder(*binder, context);
+        auto bound_expr = expr_binder.Bind(expr, nullptr);
+
+        //! Execute dummy expression into result column
+        ExpressionExecutor expr_executor(context);
+        expr_executor.AddExpression(*bound_expr);
+
+        //! Execute the expression directly into the output Chunk
+        expr_executor.ExecuteExpression(chunk.data[file_number_column_idx]);
+    }
 };
 
 bool DeltaMultiFileReader::ParseOption(const string &key, const Value &val, MultiFileReaderOptions &options, ClientContext &context) {
     auto loption = StringUtil::Lower(key);
 
-    // TODO: Fix by adding custom options?
-//    if (loption == "delta_file_number") {
-//        options.custom_options[loption] = val;
-//        return true;
-//    }
+    if (loption == "delta_file_number") {
+        options.custom_options[loption] = val;
+        return true;
+    }
 
     return MultiFileReader::ParseOption(key, val, options, context);
 }

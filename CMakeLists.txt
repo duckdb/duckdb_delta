@@ -24,7 +24,7 @@ set(EXTENSION_SOURCES
 ### Custom config
 # TODO: figure out if we really need this?
 if(APPLE)
-    set(PLATFORM_LIBS m c System resolv "-framework Corefoundation -framework SystemConfiguration")
+    set(PLATFORM_LIBS m c System resolv "-framework Corefoundation -framework SystemConfiguration -framework Security")
 elseif(UNIX)
     set(PLATFORM_LIBS m c resolv)
 elseif(WIN32)
