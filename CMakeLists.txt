@@ -85,7 +85,7 @@ include_directories(delta-kernel-rs/target/ffi-headers)
 set(CMAKE_OSX_DEPLOYMENT_TARGET 13.3 CACHE STRING "Minimum OS X deployment version" FORCE)
 
 # Add the default client
-add_compile_definitions(DEFINE_DEFAULT_CLIENT)
+add_compile_definitions(DEFINE_DEFAULT_ENGINE)
 
 # Link delta-kernal-rs to static lib
 target_link_libraries(${EXTENSION_NAME}

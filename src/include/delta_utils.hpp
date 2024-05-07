@@ -172,7 +172,7 @@ static T unpack_result_or_throw(ffi::ExternResult<T> result, const string &from_
             auto error_cast = static_cast<DuckDBEngineError*>(result.err._0);
             auto etype = error_cast->etype;
             auto message = error_cast->error_message;
-            free(error_cast);
+            delete error_cast;
 
             throw InternalException("Hit DeltaKernel FFI error (from: %s): Hit error: %u (%s) with message (%s)",
                                     from_where.c_str(), etype, kernel_error_to_string(etype), message);

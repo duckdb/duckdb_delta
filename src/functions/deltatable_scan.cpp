@@ -75,12 +75,12 @@ static void visit_data(void *engine_context, struct ffi::EngineDataHandle *engin
     ffi::visit_scan_data(engine_data, selection_vec, engine_context, visit_callback);
 }
 
-static ffi::EngineInterfaceBuilder* CreateBuilder(ClientContext &context, const string &path) {
-    ffi::EngineInterfaceBuilder* builder;
+static ffi::EngineBuilder* CreateBuilder(ClientContext &context, const string &path) {
+    ffi::EngineBuilder* builder;
 
     // For "regular" paths we early out with the default builder config
     if (!StringUtil::StartsWith(path, "s3://")) {
-        auto interface_builder_res = ffi::get_engine_interface_builder(to_delta_string_slice(path), error_allocator);
+        auto interface_builder_res = ffi::get_engine_builder(to_delta_string_slice(path), error_allocator);
         return unpack_result_or_throw(interface_builder_res, "get_engine_interface_builder for path " + path);
     }
 
@@ -92,7 +92,7 @@ static ffi::EngineInterfaceBuilder* CreateBuilder(ClientContext &context, const 
     auto bucket = path.substr(5, end_of_container-5);
     auto path_in_bucket = path.substr(end_of_container);
 
-    auto interface_builder_res = ffi::get_engine_interface_builder(to_delta_string_slice(path), error_allocator);
+    auto interface_builder_res = ffi::get_engine_builder(to_delta_string_slice(path), error_allocator);
     builder = unpack_result_or_throw(interface_builder_res, "get_engine_interface_builder for path " + path);
 
 //    ffi::set_builder_option(builder, to_delta_string_slice("aws_bucket"), to_delta_string_slice(bucket));
@@ -178,14 +178,6 @@ string DeltaTableSnapshot::GetFile(idx_t i) {
         auto size_before = resolved_files.size();
 
         auto have_scan_data_res = ffi::kernel_scan_data_next(scan_data_iterator.get(), this, visit_data);
-
-        // TODO: weird workaround required to not get "Json error: Encountered unexpected 'c' whilst parsing value"
-        if (have_scan_data_res.tag == ffi::ExternResult<bool>::Tag::Err) {
-            if (have_scan_data_res.err._0) {
-                files_exhausted = true;
-                return "";
-            }
-        }
 
         auto have_scan_data = unpack_result_or_throw(have_scan_data_res, "kernel_scan_data_next in DeltaTableSnapshot GetFile");
 

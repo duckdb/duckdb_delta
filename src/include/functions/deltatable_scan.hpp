@@ -54,7 +54,7 @@ public:
 
     //! Delta Kernel Structures
     const ffi::SnapshotHandle *snapshot;
-    const ffi::ExternEngineInterfaceHandle *table_client;
+    const ffi::ExternEngineHandle *table_client;
     ffi::Scan* scan;
     ffi::GlobalScanState *global_state;
     UniqueKernelPointer <ffi::KernelScanDataIterator> scan_data_iterator;
