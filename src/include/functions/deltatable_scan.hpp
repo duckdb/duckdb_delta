@@ -27,7 +27,8 @@ struct DeltaFileMetaData {
 struct DeltaTableSnapshot : public MultiFileList {
     DeltaTableSnapshot(ClientContext &context, const string &path);
     string GetPath();
-    static string CleanPath(const string &raw_path);
+    static string ToDuckDBPath(const string &raw_path);
+    static string ToDeltaPath(const string &raw_path);
 
     //! MultiFileList API
 public:

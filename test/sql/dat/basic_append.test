@@ -20,7 +20,7 @@ mode skip
 # Query the whole table
 query II
 SELECT letter, number
-FROM delta_scan('file:///Users/sam/Development/delta-kernel-testing/delta-kernel-rs/acceptance/tests/dat/out/reader_tests/generated/basic_append/delta')
+FROM delta_scan('./delta-kernel-rs/acceptance/tests/dat/out/reader_tests/generated/basic_append/delta')
 ----
 d	4
 e	5
@@ -30,7 +30,7 @@ c	3
 
 query I
 SELECT letter
-FROM delta_scan('file:///Users/sam/Development/delta-kernel-testing/delta-kernel-rs/acceptance/tests/dat/out/reader_tests/generated/basic_append/delta')
+FROM delta_scan('./delta-kernel-rs/acceptance/tests/dat/out/reader_tests/generated/basic_append/delta')
 ----
 d
 e
@@ -40,7 +40,7 @@ c
 
 query I
 SELECT number
-FROM delta_scan('file:///Users/sam/Development/delta-kernel-testing/delta-kernel-rs/acceptance/tests/dat/out/reader_tests/generated/basic_append/delta')
+FROM delta_scan('./delta-kernel-rs/acceptance/tests/dat/out/reader_tests/generated/basic_append/delta')
 ----
 4
 5
@@ -53,7 +53,7 @@ FROM delta_scan('file:///Users/sam/Development/delta-kernel-testing/delta-kernel
 # Now we add a filter that filters out one of the files
 query II
 SELECT letter, number
-FROM delta_scan('file:///Users/sam/Development/delta-kernel-testing/delta-kernel-rs/acceptance/tests/dat/out/reader_tests/generated/basic_append/delta')
+FROM delta_scan('./delta-kernel-rs/acceptance/tests/dat/out/reader_tests/generated/basic_append/delta')
 WHERE number < 2
 ----
 a	1
@@ -63,7 +63,7 @@ mode unskip
 # Now we add a filter that filters out the other file
 query II
 SELECT letter, number
-FROM delta_scan('file:///Users/sam/Development/delta-kernel-testing/delta-kernel-rs/acceptance/tests/dat/out/reader_tests/generated/basic_append/delta')
+FROM delta_scan('./delta-kernel-rs/acceptance/tests/dat/out/reader_tests/generated/basic_append/delta')
 WHERE number > 4
 ----
 e	5
@@ -73,6 +73,6 @@ mode skip
 # Now we add a filter that filters out all columns
 query II
 SELECT letter, number
-FROM delta_scan('file:///Users/sam/Development/delta-kernel-testing/delta-kernel-rs/acceptance/tests/dat/out/reader_tests/generated/basic_append/delta')
+FROM delta_scan('./delta-kernel-rs/acceptance/tests/dat/out/reader_tests/generated/basic_append/delta')
 WHERE number > 6
 ----

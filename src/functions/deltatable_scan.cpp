@@ -6,6 +6,7 @@
 #include "duckdb/planner/operator/logical_get.hpp"
 #include "duckdb/main/extension_util.hpp"
 #include "duckdb/catalog/catalog_entry/table_function_catalog_entry.hpp"
+#include "duckdb/common/local_file_system.hpp"
 #include "duckdb/common/types/data_chunk.hpp"
 #include "duckdb/parser/expression/constant_expression.hpp"
 #include "duckdb/parser/expression/function_expression.hpp"
@@ -37,7 +38,7 @@ static void visit_callback(ffi::NullableCvoid engine_context, const struct ffi::
 //    printf("Fetch metadata for %s\n", path_string.c_str());
 
     // First we append the file to our resolved files
-    context->resolved_files.push_back(DeltaTableSnapshot::CleanPath(path_string));
+    context->resolved_files.push_back(DeltaTableSnapshot::ToDuckDBPath(path_string));
     context->metadata.push_back({});
 
     D_ASSERT(context->resolved_files.size() == context->metadata.size());
@@ -121,18 +122,30 @@ static ffi::EngineInterfaceBuilder* CreateBuilder(ClientContext &context, const 
     return builder;
 }
 
-DeltaTableSnapshot::DeltaTableSnapshot(ClientContext &context_p, const string &path) : MultiFileList({path}, FileGlobOptions::ALLOW_EMPTY), context(context_p) {
+DeltaTableSnapshot::DeltaTableSnapshot(ClientContext &context_p, const string &path) : MultiFileList({ToDeltaPath(path)}, FileGlobOptions::ALLOW_EMPTY), context(context_p) {
 }
 
 string DeltaTableSnapshot::GetPath() {
     return GetPaths()[0];
 }
 
-string DeltaTableSnapshot::CleanPath(const string &raw_path) {
+string DeltaTableSnapshot::ToDuckDBPath(const string &raw_path) {
     if (StringUtil::StartsWith(raw_path, "file://")) {
         return raw_path.substr(7);
     }
     return raw_path;
+}
+
+string DeltaTableSnapshot::ToDeltaPath(const string &raw_path) {
+    string path;
+    if (StringUtil::StartsWith(raw_path, "./")) {
+        LocalFileSystem fs;
+        path = fs.JoinPath(fs.GetWorkingDirectory(), raw_path.substr(2));
+        path = "file://" + path;
+    } else {
+        path = raw_path;
+    }
+    return path;
 }
 
 void DeltaTableSnapshot::Bind(vector<LogicalType> &return_types, vector<string> &names) {
@@ -299,8 +312,7 @@ bool DeltaMultiFileReader::Bind(MultiFileReaderOptions &options, MultiFileList &
     bind_data.required_columns.push_back({
         "file_row_number",
          LogicalType::BIGINT,
-        file_row_number_enabled,
-        bind_data.file_row_number_idx // TODO is this even set already?
+        file_row_number_enabled
      });
 
     return true;
@@ -423,7 +435,6 @@ void DeltaMultiFileReader::FinalizeChunk(ClientContext &context, const MultiFile
                    const MultiFileReaderData &reader_data, DataChunk &chunk) {
     // Base class finalization first
     MultiFileReader::FinalizeChunk(context, bind_data, reader_data, chunk);
-    chunk.Print();
 
     D_ASSERT(reader_data.file_metadata.file_list);
 
@@ -433,8 +444,6 @@ void DeltaMultiFileReader::FinalizeChunk(ClientContext &context, const MultiFile
 
     if (metadata.selection_vector.get() && chunk.size() != 0) {
         idx_t select_count;
-        idx_t file_row_number_col_idx;
-
         auto res = reader_data.required_column_map.find("file_row_number");
         if (res == reader_data.required_column_map.end()) {
             throw InternalException("Failed to find file_row_number column used to apply the deletion vector at");

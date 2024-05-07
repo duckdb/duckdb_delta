@@ -8,7 +8,7 @@ require deltatable
 
 # Enabling the file_row_number option, but projecting it out
 #query I 
-#FROM delta_scan('file:///Users/sam/Development/delta-kernel-testing/delta-kernel-rs/kernel/tests/data/table-with-dv-small/', file_row_number=1)
+#FROM delta_scan('./delta-kernel-rs/kernel/tests/data/table-with-dv-small/', file_row_number=1)
 #----
 #1
 #2
@@ -23,7 +23,7 @@ require deltatable
 
 # Simplest example
 query I
-FROM delta_scan('file:///Users/sam/Development/delta-kernel-testing/delta-kernel-rs/kernel/tests/data/table-with-dv-small/')
+FROM delta_scan('./delta-kernel-rs/kernel/tests/data/table-with-dv-small/')
 ----
 1
 2
@@ -36,7 +36,7 @@ FROM delta_scan('file:///Users/sam/Development/delta-kernel-testing/delta-kernel
 
 # With filter: ensures the deletion vector is applied properly on top of pushed down filters
 query I
-FROM delta_scan('file:///Users/sam/Development/delta-kernel-testing/delta-kernel-rs/kernel/tests/data/table-with-dv-small/')
+FROM delta_scan('./delta-kernel-rs/kernel/tests/data/table-with-dv-small/')
 WHERE value > 3
 ----
 4
@@ -47,7 +47,7 @@ WHERE value > 3
 
 # With filter: ensures the deletion vector is applied properly on top of pushed down filters with the file_row_number column
 query II
-FROM delta_scan('file:///Users/sam/Development/delta-kernel-testing/delta-kernel-rs/kernel/tests/data/table-with-dv-small/', file_row_number=1)
+FROM delta_scan('./delta-kernel-rs/kernel/tests/data/table-with-dv-small/', file_row_number=1)
 WHERE value > 3
 ----
 4	4
@@ -58,7 +58,7 @@ WHERE value > 3
 
 # With filter and a delta scan based extra constant column
 query II
-FROM delta_scan('file:///Users/sam/Development/delta-kernel-testing/delta-kernel-rs/kernel/tests/data/table-with-dv-small/', delta_file_number=1)
+FROM delta_scan('./delta-kernel-rs/kernel/tests/data/table-with-dv-small/', delta_file_number=1)
 WHERE value > 3
 ----
 4	0
@@ -69,32 +69,32 @@ WHERE value > 3
 
 # With filter, delta-extension-originated const column, and parquet-originated const column
 query III
-SELECT value, filename, delta_file_number
-FROM delta_scan('file:///Users/sam/Development/delta-kernel-testing/delta-kernel-rs/kernel/tests/data/table-with-dv-small/', delta_file_number=1, filename=1)
+SELECT value, parse_filename(filename), delta_file_number
+FROM delta_scan('./delta-kernel-rs/kernel/tests/data/table-with-dv-small/', delta_file_number=1, filename=1)
 WHERE value > 3
 ----
-4	/Users/sam/Development/delta-kernel-testing/delta-kernel-rs/kernel/tests/data/table-with-dv-small//part-00000-fae5310a-a37d-4e51-827b-c3d5516560ca-c000.snappy.parquet	0
-5	/Users/sam/Development/delta-kernel-testing/delta-kernel-rs/kernel/tests/data/table-with-dv-small//part-00000-fae5310a-a37d-4e51-827b-c3d5516560ca-c000.snappy.parquet	0
-6	/Users/sam/Development/delta-kernel-testing/delta-kernel-rs/kernel/tests/data/table-with-dv-small//part-00000-fae5310a-a37d-4e51-827b-c3d5516560ca-c000.snappy.parquet	0
-7	/Users/sam/Development/delta-kernel-testing/delta-kernel-rs/kernel/tests/data/table-with-dv-small//part-00000-fae5310a-a37d-4e51-827b-c3d5516560ca-c000.snappy.parquet	0
-8	/Users/sam/Development/delta-kernel-testing/delta-kernel-rs/kernel/tests/data/table-with-dv-small//part-00000-fae5310a-a37d-4e51-827b-c3d5516560ca-c000.snappy.parquet	0
+4	part-00000-fae5310a-a37d-4e51-827b-c3d5516560ca-c000.snappy.parquet	0
+5	part-00000-fae5310a-a37d-4e51-827b-c3d5516560ca-c000.snappy.parquet	0
+6	part-00000-fae5310a-a37d-4e51-827b-c3d5516560ca-c000.snappy.parquet	0
+7	part-00000-fae5310a-a37d-4e51-827b-c3d5516560ca-c000.snappy.parquet	0
+8	part-00000-fae5310a-a37d-4e51-827b-c3d5516560ca-c000.snappy.parquet	0
 
 # With PRUNED filter, delta-extension-originated const column, and parquet-originated const column
 query II
-SELECT filename, delta_file_number
-FROM delta_scan('file:///Users/sam/Development/delta-kernel-testing/delta-kernel-rs/kernel/tests/data/table-with-dv-small/', delta_file_number=1, filename=1)
+SELECT parse_filename(filename), delta_file_number
+FROM delta_scan('./delta-kernel-rs/kernel/tests/data/table-with-dv-small/', delta_file_number=1, filename=1)
 WHERE value > 3
 ----
-/Users/sam/Development/delta-kernel-testing/delta-kernel-rs/kernel/tests/data/table-with-dv-small//part-00000-fae5310a-a37d-4e51-827b-c3d5516560ca-c000.snappy.parquet	0
-/Users/sam/Development/delta-kernel-testing/delta-kernel-rs/kernel/tests/data/table-with-dv-small//part-00000-fae5310a-a37d-4e51-827b-c3d5516560ca-c000.snappy.parquet	0
-/Users/sam/Development/delta-kernel-testing/delta-kernel-rs/kernel/tests/data/table-with-dv-small//part-00000-fae5310a-a37d-4e51-827b-c3d5516560ca-c000.snappy.parquet	0
-/Users/sam/Development/delta-kernel-testing/delta-kernel-rs/kernel/tests/data/table-with-dv-small//part-00000-fae5310a-a37d-4e51-827b-c3d5516560ca-c000.snappy.parquet	0
-/Users/sam/Development/delta-kernel-testing/delta-kernel-rs/kernel/tests/data/table-with-dv-small//part-00000-fae5310a-a37d-4e51-827b-c3d5516560ca-c000.snappy.parquet	0
+part-00000-fae5310a-a37d-4e51-827b-c3d5516560ca-c000.snappy.parquet	0
+part-00000-fae5310a-a37d-4e51-827b-c3d5516560ca-c000.snappy.parquet	0
+part-00000-fae5310a-a37d-4e51-827b-c3d5516560ca-c000.snappy.parquet	0
+part-00000-fae5310a-a37d-4e51-827b-c3d5516560ca-c000.snappy.parquet	0
+part-00000-fae5310a-a37d-4e51-827b-c3d5516560ca-c000.snappy.parquet	0
 
 # With PRUNED filters, delta-extension-originated const column, and parquet-originated const column
 query I
 SELECT delta_file_number
-FROM delta_scan('file:///Users/sam/Development/delta-kernel-testing/delta-kernel-rs/kernel/tests/data/table-with-dv-small/', delta_file_number=1, filename=1)
+FROM delta_scan('./delta-kernel-rs/kernel/tests/data/table-with-dv-small/', delta_file_number=1, filename=1)
 WHERE value > 3 and filename is not null
 ----
 0
@@ -106,7 +106,7 @@ WHERE value > 3 and filename is not null
 # Enabling the file_row_number option, but projecting it out
 query I
 SELECT value 
-FROM delta_scan('file:///Users/sam/Development/delta-kernel-testing/delta-kernel-rs/kernel/tests/data/table-with-dv-small/', file_row_number=1)
+FROM delta_scan('./delta-kernel-rs/kernel/tests/data/table-with-dv-small/', file_row_number=1)
 ----
 1
 2
