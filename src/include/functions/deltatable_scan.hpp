@@ -84,7 +84,7 @@ struct DeltaMultiFileReader : public MultiFileReader {
     bool Bind(MultiFileReaderOptions &options, MultiFileList &files,
               vector<LogicalType> &return_types, vector<string> &names, MultiFileReaderBindData &bind_data) override;
 
-    //! Override the Options bind. (could be superfluous?) can Bind and BindOptions be the same call?
+    //! Override the Options bind
     void BindOptions(MultiFileReaderOptions &options, MultiFileList &files,
                                         vector<LogicalType> &return_types, vector<string> &names, MultiFileReaderBindData& bind_data) override;
 

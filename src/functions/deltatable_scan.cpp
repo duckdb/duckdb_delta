@@ -34,7 +34,7 @@ static void visit_callback(ffi::NullableCvoid engine_context, const struct ffi::
     auto context = (DeltaTableSnapshot *) engine_context;
     auto path_string =  context->GetPath() + "/" + from_delta_string_slice(path);
 
-    printf("Fetch metadata for %s\n", path_string.c_str());
+//    printf("Fetch metadata for %s\n", path_string.c_str());
 
     // First we append the file to our resolved files
     context->resolved_files.push_back(DeltaTableSnapshot::CleanPath(path_string));
@@ -283,10 +283,25 @@ bool DeltaMultiFileReader::Bind(MultiFileReaderOptions &options, MultiFileList &
 
     delta_table_snapshot.Bind(return_types, names);
 
-    // If deletion vector present, we need to force the parquet readers to emit row-ids and pass the snapshot through
-    // the custom bind data
-    bind_data.file_row_number_idx = names.size();
-    bind_data.multi_file_reader_needs_file_row_number = true;
+    // We need to parse this option
+    bool file_row_number_enabled = options.custom_options.find("file_row_number") != options.custom_options.end();
+    if (file_row_number_enabled) {
+        bind_data.file_row_number_idx = names.size();
+        return_types.emplace_back(LogicalType::BIGINT);
+        names.emplace_back("file_row_number");
+    } else {
+        // TODO: this is a bogus ID?
+        bind_data.file_row_number_idx = names.size();
+    }
+
+    // This is where we want the extra column
+    // TODO: only enable this if we have deletion vectors for this scan?
+    bind_data.required_columns.push_back({
+        "file_row_number",
+         LogicalType::BIGINT,
+        file_row_number_enabled,
+        bind_data.file_row_number_idx // TODO is this even set already?
+     });
 
     return true;
 };
@@ -304,8 +319,9 @@ void DeltaMultiFileReader::BindOptions(MultiFileReaderOptions &options, MultiFil
     auto demo_gen_col_opt = options.custom_options.find("delta_file_number");
     if (demo_gen_col_opt != options.custom_options.end()) {
         if (demo_gen_col_opt->second.GetValue<bool>()) {
+            auto parquet_columns_produced = names.size();
             D_ASSERT(bind_data.custom_data.find("file_number_column_idx") == bind_data.custom_data.end());
-            bind_data.custom_data["file_number_column_idx"] = Value::UBIGINT(names.size());
+            bind_data.custom_data["file_number_column_idx"] = Value::UBIGINT(parquet_columns_produced);
             names.push_back("delta_file_number");
             return_types.push_back(LogicalType::UBIGINT);
         }
@@ -330,7 +346,17 @@ void DeltaMultiFileReader::FinalizeBind(const MultiFileReaderOptions &file_optio
 
             // TODO: we have the metadata for the file available here already, the reason we handle this in FinalizeChunk
             //       is purely for demonstration purposes
-            reader_data.constant_map.emplace_back(file_number_column_idx, Value::UBIGINT(0));
+
+            // What you can do here is 2 things:
+            // - either add the constant directly using:  reader_data.constant_map.emplace_back(i, Value::UBIGINT(0));
+            // - add the constant as a nop, store the global
+            for (idx_t i = 0; i < global_column_ids.size(); i++) {
+                column_t col_id = global_column_ids[i];
+                if (col_id == file_number_column_idx) {
+                    reader_data.constant_map.emplace_back(i, col_id, Value::UBIGINT(0));
+                    break;
+                }
+            }
         }
     }
 
@@ -346,7 +372,7 @@ void DeltaMultiFileReader::FinalizeBind(const MultiFileReaderOptions &file_optio
             if (col_partition_entry != file_metadata.partition_map.end()) {
                 // Todo: use https://github.com/delta-io/delta/blob/master/PROTOCOL.md#partition-value-serialization
                 auto maybe_value = Value(col_partition_entry->second).DefaultCastAs(global_types[i]);
-                reader_data.constant_map.emplace_back(i, maybe_value);
+                reader_data.constant_map.emplace_back(i, col_id, maybe_value);
             }
         }
     }
@@ -384,6 +410,15 @@ static SelectionVector DuckSVFromDeltaSV(ffi::KernelBoolSlice *dv, Vector row_id
     return result;
 }
 
+static idx_t LocalColIdxToResultColIdx(idx_t local_idx, const MultiFileReaderData& reader_data) {
+    for (auto &constant_entry: reader_data.constant_map) {
+        if (constant_entry.local_column_id == local_idx) {
+            return constant_entry.result_column_id;
+        }
+    }
+    return DConstants::INVALID_INDEX;
+}
+
 void DeltaMultiFileReader::FinalizeChunk(ClientContext &context, const MultiFileReaderBindData &bind_data,
                    const MultiFileReaderData &reader_data, DataChunk &chunk) {
     // Base class finalization first
@@ -398,9 +433,15 @@ void DeltaMultiFileReader::FinalizeChunk(ClientContext &context, const MultiFile
 
     if (metadata.selection_vector.get() && chunk.size() != 0) {
         idx_t select_count;
+        idx_t file_row_number_col_idx;
+
+        auto res = reader_data.required_column_map.find("file_row_number");
+        if (res == reader_data.required_column_map.end()) {
+            throw InternalException("Failed to find file_row_number column used to apply the deletion vector at");
+        }
 
         // Construct the selection vector using the file_row_number column and the raw selection vector from delta
-        auto sv = DuckSVFromDeltaSV(metadata.selection_vector.get(), chunk.data[bind_data.file_row_number_idx], chunk.size(), select_count);
+        auto sv = DuckSVFromDeltaSV(metadata.selection_vector.get(), chunk.data[res->second], chunk.size(), select_count);
 
         // Slice the result
         chunk.Slice(sv, select_count);
@@ -410,23 +451,28 @@ void DeltaMultiFileReader::FinalizeChunk(ClientContext &context, const MultiFile
     auto maybe_file_number_column_idx = bind_data.custom_data.find("file_number_column_idx");
     if (maybe_file_number_column_idx != bind_data.custom_data.end()) {
         auto file_number_column_idx = maybe_file_number_column_idx->second.GetValue<int64_t>();
-        //! Create Dummy expression (0 + file_number)
-        vector<unique_ptr<ParsedExpression>> child_expr;
-        child_expr.push_back(make_uniq<ConstantExpression>(Value::UBIGINT(0)));
-        child_expr.push_back(make_uniq<ConstantExpression>(Value::UBIGINT(metadata.file_number)));
-        unique_ptr<ParsedExpression> expr = make_uniq<FunctionExpression>("+", std::move(child_expr), nullptr, nullptr, false, true);
+        idx_t file_number_column_result_idx = LocalColIdxToResultColIdx(file_number_column_idx, reader_data);
 
-        //! s dummy expression
-        auto binder = Binder::CreateBinder(context);
-        ExpressionBinder expr_binder(*binder, context);
-        auto bound_expr = expr_binder.Bind(expr, nullptr);
+        // If the idx is present it means that it occurs in the result and we need to modify its
+        if (file_number_column_result_idx != DConstants::INVALID_INDEX) {
+            //! Create Dummy expression (0 + file_number)
+            vector<unique_ptr<ParsedExpression>> child_expr;
+            child_expr.push_back(make_uniq<ConstantExpression>(Value::UBIGINT(0)));
+            child_expr.push_back(make_uniq<ConstantExpression>(Value::UBIGINT(metadata.file_number)));
+            unique_ptr<ParsedExpression> expr = make_uniq<FunctionExpression>("+", std::move(child_expr), nullptr, nullptr, false, true);
 
-        //! Execute dummy expression into result column
-        ExpressionExecutor expr_executor(context);
-        expr_executor.AddExpression(*bound_expr);
+            //! s dummy expression
+            auto binder = Binder::CreateBinder(context);
+            ExpressionBinder expr_binder(*binder, context);
+            auto bound_expr = expr_binder.Bind(expr, nullptr);
 
-        //! Execute the expression directly into the output Chunk
-        expr_executor.ExecuteExpression(chunk.data[file_number_column_idx]);
+            //! Execute dummy expression into result column
+            ExpressionExecutor expr_executor(context);
+            expr_executor.AddExpression(*bound_expr);
+
+            //! Execute the expression directly into the output Chunk
+            expr_executor.ExecuteExpression(chunk.data[file_number_column_result_idx]);
+        }
     }
 };
 
@@ -434,6 +480,12 @@ bool DeltaMultiFileReader::ParseOption(const string &key, const Value &val, Mult
     auto loption = StringUtil::Lower(key);
 
     if (loption == "delta_file_number") {
+        options.custom_options[loption] = val;
+        return true;
+    }
+
+    // We need to capture this one to know whether to emit
+    if (loption == "file_row_number") {
         options.custom_options[loption] = val;
         return true;
     }
