@@ -74,6 +74,17 @@ public:
     ClientContext &context;
 };
 
+struct DeltaMultiFileReaderGlobalState : public MultiFileReaderGlobalState {
+    DeltaMultiFileReaderGlobalState(vector<LogicalType> extra_columns_p, optional_ptr<const MultiFileList> file_list_p) : MultiFileReaderGlobalState(extra_columns_p, file_list_p) {
+    }
+    //! The idx of the file number column in the result chunk
+    idx_t delta_file_number_idx = DConstants::INVALID_INDEX;
+    //! The idx of the file_row_number column in the result chunk
+    idx_t file_row_number_idx = DConstants::INVALID_INDEX;
+
+    void SetColumnIdx(const string &column, idx_t idx);
+};
+
 struct DeltaMultiFileReader : public MultiFileReader {
     static unique_ptr<MultiFileReader> CreateInstance();
     //! Return a DeltaTableSnapshot
@@ -89,15 +100,26 @@ struct DeltaMultiFileReader : public MultiFileReader {
     void BindOptions(MultiFileReaderOptions &options, MultiFileList &files,
                                         vector<LogicalType> &return_types, vector<string> &names, MultiFileReaderBindData& bind_data) override;
 
+    void CreateNameMapping(const string &file_name, const vector<LogicalType> &local_types,
+                      const vector<string> &local_names, const vector<LogicalType> &global_types,
+                      const vector<string> &global_names, const vector<column_t> &global_column_ids,
+                      MultiFileReaderData &reader_data, const string &initial_file,
+                      optional_ptr<MultiFileReaderGlobalState> global_state);
+
+    unique_ptr<MultiFileReaderGlobalState> InitializeGlobalState(ClientContext &context, const MultiFileReaderOptions &file_options,
+                          const MultiFileReaderBindData &bind_data, const MultiFileList &file_list,
+                          const vector<LogicalType> &global_types, const vector<string> &global_names,
+                          const vector<column_t> &global_column_ids) override;
+
     void FinalizeBind(const MultiFileReaderOptions &file_options, const MultiFileReaderBindData &options,
                                        const string &filename, const vector<string> &local_names,
                                        const vector<LogicalType> &global_types, const vector<string> &global_names,
                                        const vector<column_t> &global_column_ids, MultiFileReaderData &reader_data,
-                                       ClientContext &context) override;
+                                       ClientContext &context, optional_ptr<MultiFileReaderGlobalState> global_state) override;
 
     //! Override the FinalizeChunk method
     void FinalizeChunk(ClientContext &context, const MultiFileReaderBindData &bind_data,
-                       const MultiFileReaderData &reader_data, DataChunk &chunk) override;
+                       const MultiFileReaderData &reader_data, DataChunk &chunk, optional_ptr<MultiFileReaderGlobalState> global_state) override;
 
     //! Override the ParseOption call to parse delta_scan specific options
     bool ParseOption(const string &key, const Value &val, MultiFileReaderOptions &options,

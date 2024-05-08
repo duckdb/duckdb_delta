@@ -6,21 +6,6 @@ require parquet
 
 require deltatable
 
-# Enabling the file_row_number option, but projecting it out
-#query I 
-#FROM delta_scan('./delta-kernel-rs/kernel/tests/data/table-with-dv-small/', file_row_number=1)
-#----
-#1
-#2
-#3
-#4
-#5
-#6
-#7
-#8
-#
-#mode skip
-
 # Simplest example
 query I
 FROM delta_scan('./delta-kernel-rs/kernel/tests/data/table-with-dv-small/')
