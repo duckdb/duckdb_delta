@@ -1,0 +1,41 @@
+# name: test/sql/delta_scan_generated_dv.test
+# description: test deltatable extension
+# group: [deltatable]
+
+require parquet
+
+require deltatable
+
+require-env GENERATED_DATA_AVAILABLE
+
+query I rowsort q1
+SELECT sum(id) FROM delta_scan('./data/generated/simple_sf1_with_dv/delta_lake/')
+----
+
+query I rowsort q1
+SELECT sum(id) FROM parquet_scan('./data/generated/simple_sf1_with_dv/parquet/*.parquet')
+----
+
+query I rowsort q2
+SELECT
+    sum(l_extendedprice * l_discount) AS revenue
+FROM
+    delta_scan('./data/generated/lineitem_sf1_with_dv/delta_lake/')
+WHERE
+    l_shipdate::date >= CAST('1994-01-01' AS date)
+  AND l_shipdate::date < CAST('1995-01-01' AS date)
+  AND l_discount BETWEEN 5 AND 7
+  AND l_quantity < 2400
+----
+
+query I rowsort q2
+SELECT
+    sum(l_extendedprice * l_discount) AS revenue
+FROM
+    parquet_scan('./data/generated/lineitem_sf1_with_dv/parquet/*.parquet')
+WHERE
+    l_shipdate::date >= CAST('1994-01-01' AS date)
+  AND l_shipdate::date < CAST('1995-01-01' AS date)
+  AND l_discount BETWEEN 5 AND 7
+  AND l_quantity < 2400
+----

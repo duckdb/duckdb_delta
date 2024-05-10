@@ -18,7 +18,6 @@ struct DeltaFileMetaData {
     idx_t file_number;
 
     UniqueKernelPointer <ffi::KernelBoolSlice> selection_vector;
-    idx_t current_selection_vector_offset = 0; // TODO move into a state passed to FinalizeChunk
 
     case_insensitive_map_t<string> partition_map;
 };

@@ -369,7 +369,7 @@ unique_ptr<MultiFileList> DeltaMultiFileReader::CreateFileList(ClientContext &co
 }
 
 // Generate the correct Selection Vector Based on the Raw delta KernelBoolSlice dv and the row_id_column
-// TODO: benchmark this?
+// TODO: this probably is slower than needed (we can do with less branches in the for loop for most cases)
 static SelectionVector DuckSVFromDeltaSV(ffi::KernelBoolSlice *dv, Vector row_id_column, idx_t count, idx_t &select_count) {
     D_ASSERT(row_id_column.GetType() == LogicalType::BIGINT);
 
@@ -381,7 +381,9 @@ static SelectionVector DuckSVFromDeltaSV(ffi::KernelBoolSlice *dv, Vector row_id
     idx_t current_select = 0;
     for (idx_t i = 0; i < count; i++) {
         auto row_id = row_ids[data.sel->get_index(i)];
-        if (dv->ptr[row_id]) {
+
+        // TODO: why are deletion vectors not spanning whole data?
+        if (row_id >= dv->len || dv->ptr[row_id]) {
             result.data()[current_select] = i;
             current_select++;
         }
