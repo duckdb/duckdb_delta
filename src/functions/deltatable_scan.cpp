@@ -50,8 +50,8 @@ static void visit_callback(ffi::NullableCvoid engine_context, const struct ffi::
     // Fetch the deletion vector
     auto selection_vector_res = ffi::selection_vector_from_dv(dv_info, context->table_client, context->global_state);
     auto selection_vector = unpack_result_or_throw(selection_vector_res, "selection_vector_from_dv for path " + context->GetPath());
-    if (selection_vector) {
-        context->metadata.back().selection_vector = {selection_vector, ffi::drop_bool_slice};
+    if (selection_vector.ptr) {
+        context->metadata.back().selection_vector = selection_vector;
     }
 
     // Lookup all columns for potential hits in the constant map
@@ -370,7 +370,7 @@ unique_ptr<MultiFileList> DeltaMultiFileReader::CreateFileList(ClientContext &co
 
 // Generate the correct Selection Vector Based on the Raw delta KernelBoolSlice dv and the row_id_column
 // TODO: this probably is slower than needed (we can do with less branches in the for loop for most cases)
-static SelectionVector DuckSVFromDeltaSV(ffi::KernelBoolSlice *dv, Vector row_id_column, idx_t count, idx_t &select_count) {
+static SelectionVector DuckSVFromDeltaSV(const ffi::KernelBoolSlice &dv, Vector row_id_column, idx_t count, idx_t &select_count) {
     D_ASSERT(row_id_column.GetType() == LogicalType::BIGINT);
 
     UnifiedVectorFormat data;
@@ -383,7 +383,7 @@ static SelectionVector DuckSVFromDeltaSV(ffi::KernelBoolSlice *dv, Vector row_id
         auto row_id = row_ids[data.sel->get_index(i)];
 
         // TODO: why are deletion vectors not spanning whole data?
-        if (row_id >= dv->len || dv->ptr[row_id]) {
+        if (row_id >= dv.len || dv.ptr[row_id]) {
             result.data()[current_select] = i;
             current_select++;
         }
@@ -513,13 +513,13 @@ void DeltaMultiFileReader::FinalizeChunk(ClientContext &context, const MultiFile
     const auto &snapshot = dynamic_cast<const DeltaTableSnapshot&>(*global_state->file_list);
     auto &metadata = snapshot.metadata[reader_data.file_list_idx.GetIndex()];
 
-    if (metadata.selection_vector.get() && chunk.size() != 0) {
+    if (metadata.selection_vector.ptr && chunk.size() != 0) {
         D_ASSERT(delta_global_state.file_row_number_idx != DConstants::INVALID_INDEX);
         auto &file_row_number_column = chunk.data[delta_global_state.file_row_number_idx];
 
         // Construct the selection vector using the file_row_number column and the raw selection vector from delta
         idx_t select_count;
-        auto sv = DuckSVFromDeltaSV(metadata.selection_vector.get(), file_row_number_column, chunk.size(), select_count);
+        auto sv = DuckSVFromDeltaSV(metadata.selection_vector, file_row_number_column, chunk.size(), select_count);
         chunk.Slice(sv, select_count);
     }
 
