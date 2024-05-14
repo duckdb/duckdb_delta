@@ -188,8 +188,6 @@ jobs:
 
       - name: Test extension
         if: ${{ matrix.duckdb_arch != 'linux_arm64'}}
-        env:
-          DAT_AVAILABLE: 1
         run: |
           make test
 
@@ -266,8 +264,6 @@ jobs:
       - name: Test Extension
         if: ${{ matrix.osx_build_arch == 'arm64'}}
         shell: bash
-        env:
-          DAT_AVAILABLE: 1
         run: |
           make test
 
