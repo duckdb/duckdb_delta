@@ -1,6 +1,6 @@
-# name: test/sql/delta_scan_simple_part_generated.test
-# description: test delta extension
-# group: [delta]
+# name: test/sql/generated/simple_partitioned.test
+# description: test simple partitioned dataset
+# group: [delta_generated]
 
 require parquet
 

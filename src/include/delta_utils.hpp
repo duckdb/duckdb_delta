@@ -20,9 +20,11 @@ public:
         visitor.data = &state;
         visitor.make_field_list = (uintptr_t (*)(void*, uintptr_t)) &MakeFieldList;
         visitor.visit_struct = (void (*)(void*, uintptr_t, ffi::KernelStringSlice, uintptr_t)) &VisitStruct;
+        visitor.visit_decimal = (void (*)(void*, uintptr_t, ffi::KernelStringSlice, uint8_t , int8_t)) &VisitDecimal;
         visitor.visit_string = VisitSimpleType<LogicalType::VARCHAR>();
         visitor.visit_long = VisitSimpleType<LogicalType::BIGINT>();
-        visitor.visit_integer = VisitSimpleType<LogicalType::SMALLINT>();
+        visitor.visit_integer = VisitSimpleType<LogicalType::INTEGER>();
+        visitor.visit_short = VisitSimpleType<LogicalType::SMALLINT>();
         visitor.visit_byte = VisitSimpleType<LogicalType::TINYINT>();
         visitor.visit_float = VisitSimpleType<LogicalType::FLOAT>();
         visitor.visit_double = VisitSimpleType<LogicalType::DOUBLE>();
@@ -49,6 +51,10 @@ private:
     template <LogicalTypeId TypeId>
     static void VisitSimpleTypeImpl(SchemaVisitor* state, uintptr_t sibling_list_id, ffi::KernelStringSlice name) {
         state->AppendToList(sibling_list_id, name, TypeId);
+    }
+
+    static void VisitDecimal(SchemaVisitor* state, uintptr_t sibling_list_id, ffi::KernelStringSlice name, uint8_t precision, int8_t scale) {
+        state->AppendToList(sibling_list_id, name, LogicalType::DECIMAL(precision, scale));
     }
 
     static uintptr_t MakeFieldList(SchemaVisitor* state, uintptr_t capacity_hint) {

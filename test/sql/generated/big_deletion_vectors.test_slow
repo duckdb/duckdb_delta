@@ -1,6 +1,6 @@
-# name: test/sql/delta_scan_generated_dv.test
-# description: test delta extension
-# group: [delta]
+# name: test/sql/generated/big_deletion_vectors.test_slow
+# description: Test medium sized data with deletion vectors
+# group: [delta_generated]
 
 require parquet
 

@@ -1,4 +1,4 @@
-# name: test/sql/delta_with_dv.test
+# name: test/sql/delta_kernel_rs/simple_with_dv.test
 # description: test delta extension with deletion vector
 # group: [delta]
 

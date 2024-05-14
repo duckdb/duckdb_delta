@@ -14,14 +14,20 @@
 namespace duckdb {
 
 struct DeltaFileMetaData {
+    DeltaFileMetaData() {};
+
+    // No copying pls
+    DeltaFileMetaData (const DeltaFileMetaData&) = delete;
+    DeltaFileMetaData& operator= (const DeltaFileMetaData&) = delete;
+
     ~DeltaFileMetaData() {
         if (selection_vector.ptr) {
             ffi::drop_bool_slice(selection_vector);
         }
     }
 
-    idx_t delta_snapshot_version;
-    idx_t file_number;
+    idx_t delta_snapshot_version = DConstants::INVALID_INDEX;
+    idx_t file_number = DConstants::INVALID_INDEX;
     ffi::KernelBoolSlice selection_vector = {nullptr, 0};
     case_insensitive_map_t<string> partition_map;
 };
@@ -66,7 +72,7 @@ public:
     vector<string> names;
 
     //! Metadata map for files
-    vector<DeltaFileMetaData> metadata;
+    vector<unique_ptr<DeltaFileMetaData>> metadata;
 
     //! Current file list resolution state
     bool initialized = false;

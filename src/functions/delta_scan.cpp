@@ -39,19 +39,19 @@ static void visit_callback(ffi::NullableCvoid engine_context, const struct ffi::
 
     // First we append the file to our resolved files
     context->resolved_files.push_back(DeltaSnapshot::ToDuckDBPath(path_string));
-    context->metadata.push_back({});
+    context->metadata.emplace_back(make_uniq<DeltaFileMetaData>());
 
     D_ASSERT(context->resolved_files.size() == context->metadata.size());
 
     // Initialize the file metadata
-    context->metadata.back().delta_snapshot_version = context->version;
-    context->metadata.back().file_number = context->resolved_files.size() - 1;
+    context->metadata.back()->delta_snapshot_version = context->version;
+    context->metadata.back()->file_number = context->resolved_files.size() - 1;
 
     // Fetch the deletion vector
     auto selection_vector_res = ffi::selection_vector_from_dv(dv_info, context->table_client, context->global_state);
     auto selection_vector = unpack_result_or_throw(selection_vector_res, "selection_vector_from_dv for path " + context->GetPath());
     if (selection_vector.ptr) {
-        context->metadata.back().selection_vector = selection_vector;
+        context->metadata.back()->selection_vector = selection_vector;
     }
 
     // Lookup all columns for potential hits in the constant map
@@ -65,7 +65,7 @@ static void visit_callback(ffi::NullableCvoid engine_context, const struct ffi::
             delete partition_val;
         }
     }
-    context->metadata.back().partition_map = std::move(constant_map);
+    context->metadata.back()->partition_map = std::move(constant_map);
 }
 
 static void visit_data(void *engine_context, struct ffi::EngineDataHandle *engine_data, const struct ffi::KernelBoolSlice selection_vec) {
@@ -347,11 +347,11 @@ void DeltaMultiFileReader::FinalizeBind(const MultiFileReaderOptions &file_optio
     const auto &snapshot = dynamic_cast<const DeltaSnapshot&>(*global_state->file_list);
     auto &file_metadata = snapshot.metadata[reader_data.file_list_idx.GetIndex()];
 
-    if (!file_metadata.partition_map.empty()) {
+    if (!file_metadata->partition_map.empty()) {
         for (idx_t i = 0; i < global_column_ids.size(); i++) {
             column_t col_id = global_column_ids[i];
-            auto col_partition_entry = file_metadata.partition_map.find(global_names[col_id]);
-            if (col_partition_entry != file_metadata.partition_map.end()) {
+            auto col_partition_entry = file_metadata->partition_map.find(global_names[col_id]);
+            if (col_partition_entry != file_metadata->partition_map.end()) {
                 // Todo: use https://github.com/delta-io/delta/blob/master/PROTOCOL.md#partition-value-serialization
                 auto maybe_value = Value(col_partition_entry->second).DefaultCastAs(global_types[i]);
                 reader_data.constant_map.emplace_back(i, maybe_value);
@@ -513,13 +513,13 @@ void DeltaMultiFileReader::FinalizeChunk(ClientContext &context, const MultiFile
     const auto &snapshot = dynamic_cast<const DeltaSnapshot&>(*global_state->file_list);
     auto &metadata = snapshot.metadata[reader_data.file_list_idx.GetIndex()];
 
-    if (metadata.selection_vector.ptr && chunk.size() != 0) {
+    if (metadata->selection_vector.ptr && chunk.size() != 0) {
         D_ASSERT(delta_global_state.file_row_number_idx != DConstants::INVALID_INDEX);
         auto &file_row_number_column = chunk.data[delta_global_state.file_row_number_idx];
 
         // Construct the selection vector using the file_row_number column and the raw selection vector from delta
         idx_t select_count;
-        auto sv = DuckSVFromDeltaSV(metadata.selection_vector, file_row_number_column, chunk.size(), select_count);
+        auto sv = DuckSVFromDeltaSV(metadata->selection_vector, file_row_number_column, chunk.size(), select_count);
         chunk.Slice(sv, select_count);
     }
 
@@ -528,7 +528,7 @@ void DeltaMultiFileReader::FinalizeChunk(ClientContext &context, const MultiFile
         //! Create Dummy expression (0 + file_number)
         vector<unique_ptr<ParsedExpression>> child_expr;
         child_expr.push_back(make_uniq<ConstantExpression>(Value::UBIGINT(0)));
-        child_expr.push_back(make_uniq<ConstantExpression>(Value::UBIGINT(metadata.file_number)));
+        child_expr.push_back(make_uniq<ConstantExpression>(Value::UBIGINT(metadata->file_number)));
         unique_ptr<ParsedExpression> expr = make_uniq<FunctionExpression>("+", std::move(child_expr), nullptr, nullptr, false, true);
 
         //! s dummy expression
