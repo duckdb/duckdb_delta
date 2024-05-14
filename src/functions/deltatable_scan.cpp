@@ -345,7 +345,7 @@ void DeltaMultiFileReader::FinalizeBind(const MultiFileReaderOptions &file_optio
     // Get the metadata for this file
     D_ASSERT(global_state->file_list);
     const auto &snapshot = dynamic_cast<const DeltaTableSnapshot&>(*global_state->file_list);
-    auto &file_metadata = snapshot.metadata[reader_data.file_list_idx];
+    auto &file_metadata = snapshot.metadata[reader_data.file_list_idx.GetIndex()];
 
     if (!file_metadata.partition_map.empty()) {
         for (idx_t i = 0; i < global_column_ids.size(); i++) {
@@ -511,7 +511,7 @@ void DeltaMultiFileReader::FinalizeChunk(ClientContext &context, const MultiFile
 
     // Get the metadata for this file
     const auto &snapshot = dynamic_cast<const DeltaTableSnapshot&>(*global_state->file_list);
-    auto &metadata = snapshot.metadata[reader_data.file_list_idx];
+    auto &metadata = snapshot.metadata[reader_data.file_list_idx.GetIndex()];
 
     if (metadata.selection_vector.get() && chunk.size() != 0) {
         D_ASSERT(delta_global_state.file_row_number_idx != DConstants::INVALID_INDEX);
