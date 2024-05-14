@@ -1,10 +1,10 @@
 # name: test/sql/delta_scan_simple_part_generated.test
-# description: test deltatable extension
-# group: [deltatable]
+# description: test delta extension
+# group: [delta]
 
 require parquet
 
-require deltatable
+require delta
 
 require-env GENERATED_DATA_AVAILABLE
 

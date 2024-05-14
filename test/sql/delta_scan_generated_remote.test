@@ -1,6 +1,6 @@
 # name: test/sql/delta_scan_generated_remote.test
 # description: test delta scan on remote data using secret
-# group: [deltatable]
+# group: [delta]
 
 require parquet
 
@@ -8,7 +8,7 @@ require httpfs
 
 require aws
 
-require deltatable
+require delta
 
 require-env GENERATED_S3_DATA_AVAILABLE
 

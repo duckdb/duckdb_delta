@@ -2,7 +2,7 @@ cmake_minimum_required(VERSION 2.8.12)
 include(ExternalProject)
 
 ### Core config
-set(TARGET_NAME deltatable)
+set(TARGET_NAME delta)
 
 set(EXTENSION_NAME ${TARGET_NAME}_extension)
 set(LOADABLE_EXTENSION_NAME ${TARGET_NAME}_loadable_extension)
@@ -17,9 +17,9 @@ include_directories(duckdb/third_party/parquet)
 include_directories(duckdb/third_party/thrift)
 
 set(EXTENSION_SOURCES
-        src/deltatable_extension.cpp
-        src/deltatable_functions.cpp
-        src/functions/deltatable_scan.cpp)
+        src/delta_extension.cpp
+        src/delta_functions.cpp
+        src/functions/delta_scan.cpp)
 
 ### Custom config
 # TODO: figure out if we really need this?

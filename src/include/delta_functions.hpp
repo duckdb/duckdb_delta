@@ -1,7 +1,7 @@
 //===----------------------------------------------------------------------===//
 //                         DuckDB
 //
-// deltatable_functions.hpp
+// delta_functions.hpp
 //
 //
 //===----------------------------------------------------------------------===//
@@ -12,7 +12,7 @@
 
 namespace duckdb {
 
-class DeltatableFunctions {
+class DeltaFunctions {
 public:
     static vector<TableFunctionSet> GetTableFunctions(DatabaseInstance &instance);
 

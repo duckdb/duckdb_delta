@@ -1,10 +1,10 @@
 # name: test/sql/dat_primitive_types.test
 # description: DAT test suite: primitive types 
-# group: [deltatable]
+# group: [delta]
 
 require parquet
 
-require deltatable
+require delta
 
 require-env DAT_AVAILABLE
 

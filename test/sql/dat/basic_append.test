@@ -1,10 +1,10 @@
 # name: test/sql/dat/basic_append.test
 # description: DAT test suite: basic_append 
-# group: [deltatable]
+# group: [delta]
 
 require parquet
 
-require deltatable
+require delta
 
 require-env DAT_AVAILABLE
 

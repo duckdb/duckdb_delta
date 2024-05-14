@@ -1,7 +1,7 @@
 //===----------------------------------------------------------------------===//
 //                         DuckDB
 //
-// functions/deltatable_scan.hpp
+// functions/delta_scan.hpp
 //
 //
 //===----------------------------------------------------------------------===//
@@ -26,9 +26,9 @@ struct DeltaFileMetaData {
     case_insensitive_map_t<string> partition_map;
 };
 
-//! The DeltaTableSnapshot implements the MultiFileList API to allow injecting it into the regular DuckDB parquet scan
-struct DeltaTableSnapshot : public MultiFileList {
-    DeltaTableSnapshot(ClientContext &context, const string &path);
+//! The DeltaSnapshot implements the MultiFileList API to allow injecting it into the regular DuckDB parquet scan
+struct DeltaSnapshot : public MultiFileList {
+    DeltaSnapshot(ClientContext &context, const string &path);
     string GetPath();
     static string ToDuckDBPath(const string &raw_path);
     static string ToDeltaPath(const string &raw_path);
@@ -90,7 +90,7 @@ struct DeltaMultiFileReaderGlobalState : public MultiFileReaderGlobalState {
 
 struct DeltaMultiFileReader : public MultiFileReader {
     static unique_ptr<MultiFileReader> CreateInstance();
-    //! Return a DeltaTableSnapshot
+    //! Return a DeltaSnapshot
     unique_ptr<MultiFileList> CreateFileList(ClientContext &context, const vector<string> &paths,
                    FileGlobOptions options) override;
 

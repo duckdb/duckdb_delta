@@ -1,10 +1,10 @@
-# name: test/sql/deltatable_with_dv.test
-# description: test deltatable extension with deletion vector
-# group: [deltatable]
+# name: test/sql/delta_with_dv.test
+# description: test delta extension with deletion vector
+# group: [delta]
 
 require parquet
 
-require deltatable
+require delta
 
 # Simplest example
 query I

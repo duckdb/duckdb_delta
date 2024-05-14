@@ -1,10 +1,10 @@
 # name: test/sql/delta_scan_parquet_params.test
 # description: test that named params to the parquet_scan still work
-# group: [deltatable]
+# group: [delta]
 
 require parquet
 
-require deltatable
+require delta
 
 # Filename param (i.e. MultiFileReader provided) 
 query II

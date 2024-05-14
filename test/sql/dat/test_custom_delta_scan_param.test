@@ -1,10 +1,10 @@
 # name: test/sql/dat/test_custom_delta_scan_param.test
 # description: DAT test suite: use the basic append test to test the delta_file_number param 
-# group: [deltatable]
+# group: [delta]
 
 require parquet
 
-require deltatable
+require delta
 
 require-env DAT_AVAILABLE
 

@@ -1,7 +1,7 @@
 #define DUCKDB_EXTENSION_MAIN
 
-#include "deltatable_extension.hpp"
-#include "deltatable_functions.hpp"
+#include "delta_extension.hpp"
+#include "delta_functions.hpp"
 
 #include "duckdb.hpp"
 #include "duckdb/common/exception.hpp"
@@ -13,29 +13,29 @@ namespace duckdb {
 
 static void LoadInternal(DatabaseInstance &instance) {
     // Load functions
-    for (const auto &function : DeltatableFunctions::GetTableFunctions(instance)) {
+    for (const auto &function : DeltaFunctions::GetTableFunctions(instance)) {
         ExtensionUtil::RegisterFunction(instance, function);
     }
 }
 
-void DeltatableExtension::Load(DuckDB &db) {
+void DeltaExtension::Load(DuckDB &db) {
     LoadInternal(*db.instance);
 }
 
-std::string DeltatableExtension::Name() {
-    return "deltatable";
+std::string DeltaExtension::Name() {
+    return "delta";
 }
 
 } // namespace duckdb
 
 extern "C" {
 
-DUCKDB_EXTENSION_API void deltatable_init(duckdb::DatabaseInstance &db) {
+DUCKDB_EXTENSION_API void delta_init(duckdb::DatabaseInstance &db) {
     duckdb::DuckDB db_wrapper(db);
-    db_wrapper.LoadExtension<duckdb::DeltatableExtension>();
+    db_wrapper.LoadExtension<duckdb::DeltaExtension>();
 }
 
-DUCKDB_EXTENSION_API const char *deltatable_version() {
+DUCKDB_EXTENSION_API const char *delta_version() {
     return duckdb::DuckDB::LibraryVersion();
 }
 }

@@ -1,4 +1,4 @@
-#include "deltatable_functions.hpp"
+#include "delta_functions.hpp"
 
 #include "duckdb.hpp"
 #include "duckdb/main/extension_util.hpp"
@@ -6,7 +6,7 @@
 
 namespace duckdb {
 
-vector<TableFunctionSet> DeltatableFunctions::GetTableFunctions(DatabaseInstance &instance) {
+vector<TableFunctionSet> DeltaFunctions::GetTableFunctions(DatabaseInstance &instance) {
     vector<TableFunctionSet> functions;
 
     functions.push_back(GetDeltaScanFunction(instance));

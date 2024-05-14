@@ -1,10 +1,10 @@
-# name: test/sql/deltatable.test
-# description: test deltatable extension with some basic tests
-# group: [deltatable]
+# name: test/sql/delta.test
+# description: test delta extension with some basic tests
+# group: [delta]
 
 require parquet
 
-require deltatable
+require delta
 
 # Simplest example
 query I

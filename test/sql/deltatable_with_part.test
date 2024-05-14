@@ -1,10 +1,10 @@
-# name: test/sql/deltatable_with_part.test
-# description: test deltatable extension with partitions
-# group: [deltatable]
+# name: test/sql/delta_with_part.test
+# description: test delta extension with partitions
+# group: [delta]
 
 require parquet
 
-require deltatable
+require delta
 
 # FIXME: this fails because Delta Kernel does not expose the __HIVE_DEFAULT_PARTITION__ it seems
 # EDIT: this now fails with a different error?

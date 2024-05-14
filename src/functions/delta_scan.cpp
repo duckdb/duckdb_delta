@@ -1,7 +1,7 @@
 #include "duckdb/function/table_function.hpp"
 
-#include "deltatable_functions.hpp"
-#include "functions/deltatable_scan.hpp"
+#include "delta_functions.hpp"
+#include "functions/delta_scan.hpp"
 #include "duckdb/optimizer/filter_combiner.hpp"
 #include "duckdb/planner/operator/logical_get.hpp"
 #include "duckdb/main/extension_util.hpp"
@@ -32,13 +32,13 @@ static void* allocate_string(const struct ffi::KernelStringSlice slice) {
 }
 
 static void visit_callback(ffi::NullableCvoid engine_context, const struct ffi::KernelStringSlice path, int64_t size, const ffi::DvInfo *dv_info, struct ffi::CStringMap *partition_values) {
-    auto context = (DeltaTableSnapshot *) engine_context;
+    auto context = (DeltaSnapshot *) engine_context;
     auto path_string =  context->GetPath() + "/" + from_delta_string_slice(path);
 
 //    printf("Fetch metadata for %s\n", path_string.c_str());
 
     // First we append the file to our resolved files
-    context->resolved_files.push_back(DeltaTableSnapshot::ToDuckDBPath(path_string));
+    context->resolved_files.push_back(DeltaSnapshot::ToDuckDBPath(path_string));
     context->metadata.push_back({});
 
     D_ASSERT(context->resolved_files.size() == context->metadata.size());
@@ -122,21 +122,21 @@ static ffi::EngineBuilder* CreateBuilder(ClientContext &context, const string &p
     return builder;
 }
 
-DeltaTableSnapshot::DeltaTableSnapshot(ClientContext &context_p, const string &path) : MultiFileList({ToDeltaPath(path)}, FileGlobOptions::ALLOW_EMPTY), context(context_p) {
+DeltaSnapshot::DeltaSnapshot(ClientContext &context_p, const string &path) : MultiFileList({ToDeltaPath(path)}, FileGlobOptions::ALLOW_EMPTY), context(context_p) {
 }
 
-string DeltaTableSnapshot::GetPath() {
+string DeltaSnapshot::GetPath() {
     return GetPaths()[0];
 }
 
-string DeltaTableSnapshot::ToDuckDBPath(const string &raw_path) {
+string DeltaSnapshot::ToDuckDBPath(const string &raw_path) {
     if (StringUtil::StartsWith(raw_path, "file://")) {
         return raw_path.substr(7);
     }
     return raw_path;
 }
 
-string DeltaTableSnapshot::ToDeltaPath(const string &raw_path) {
+string DeltaSnapshot::ToDeltaPath(const string &raw_path) {
     string path;
     if (StringUtil::StartsWith(raw_path, "./")) {
         LocalFileSystem fs;
@@ -148,7 +148,7 @@ string DeltaTableSnapshot::ToDeltaPath(const string &raw_path) {
     return path;
 }
 
-void DeltaTableSnapshot::Bind(vector<LogicalType> &return_types, vector<string> &names) {
+void DeltaSnapshot::Bind(vector<LogicalType> &return_types, vector<string> &names) {
     if (!initialized) {
         InitializeFiles();
     }
@@ -161,7 +161,7 @@ void DeltaTableSnapshot::Bind(vector<LogicalType> &return_types, vector<string> 
     this->names = names;
 }
 
-string DeltaTableSnapshot::GetFile(idx_t i) {
+string DeltaSnapshot::GetFile(idx_t i) {
     if (!initialized) {
         InitializeFiles();
     }
@@ -179,7 +179,7 @@ string DeltaTableSnapshot::GetFile(idx_t i) {
 
         auto have_scan_data_res = ffi::kernel_scan_data_next(scan_data_iterator.get(), this, visit_data);
 
-        auto have_scan_data = unpack_result_or_throw(have_scan_data_res, "kernel_scan_data_next in DeltaTableSnapshot GetFile");
+        auto have_scan_data = unpack_result_or_throw(have_scan_data_res, "kernel_scan_data_next in DeltaSnapshot GetFile");
 
         // TODO: shouldn't the kernel always return false here?
         if (!have_scan_data || resolved_files.size() == size_before) {
@@ -196,7 +196,7 @@ string DeltaTableSnapshot::GetFile(idx_t i) {
     return resolved_files[i];
 }
 
-void DeltaTableSnapshot::InitializeFiles() {
+void DeltaSnapshot::InitializeFiles() {
     auto path_slice = to_delta_string_slice(paths[0]);
 
     auto interface_builder = CreateBuilder(context, paths[0]);
@@ -230,7 +230,7 @@ void DeltaTableSnapshot::InitializeFiles() {
     initialized = true;
 }
 
-unique_ptr<MultiFileList> DeltaTableSnapshot::ComplexFilterPushdown(ClientContext &context, const MultiFileReaderOptions &options, LogicalGet &get,
+unique_ptr<MultiFileList> DeltaSnapshot::ComplexFilterPushdown(ClientContext &context, const MultiFileReaderOptions &options, LogicalGet &get,
                                                vector<unique_ptr<Expression>> &filters) {
     FilterCombiner combiner(context);
     for (const auto &filter : filters) {
@@ -240,14 +240,14 @@ unique_ptr<MultiFileList> DeltaTableSnapshot::ComplexFilterPushdown(ClientContex
 
     // TODO: can/should we figure out if this filtered anything?
     // TODO2: make this copy more efficient? can we move-copy this thing leaving the old one uninitialized?
-    auto filtered_list = make_uniq<DeltaTableSnapshot>(context, paths[0]);
+    auto filtered_list = make_uniq<DeltaSnapshot>(context, paths[0]);
     filtered_list->table_filters = std::move(filterstmp);
     filtered_list->names = names;
 
     return filtered_list;
 }
 
-vector<string> DeltaTableSnapshot::GetAllFiles() {
+vector<string> DeltaSnapshot::GetAllFiles() {
     idx_t i = resolved_files.size();
     // TODO: this can probably be improved
     while(!GetFile(i).empty()) {
@@ -256,7 +256,7 @@ vector<string> DeltaTableSnapshot::GetAllFiles() {
     return resolved_files;
 }
 
-FileExpandResult DeltaTableSnapshot::GetExpandResult() {
+FileExpandResult DeltaSnapshot::GetExpandResult() {
     // GetFile(1) will ensure at least the first 2 files are expanded if they are available
     GetFile(1);
 
@@ -269,7 +269,7 @@ FileExpandResult DeltaTableSnapshot::GetExpandResult() {
     return FileExpandResult::NO_FILES;
 }
 
-idx_t DeltaTableSnapshot::GetTotalFileCount() {
+idx_t DeltaSnapshot::GetTotalFileCount() {
     // TODO: this can probably be improved
     idx_t i = resolved_files.size();
     while(!GetFile(i).empty()) {
@@ -284,9 +284,9 @@ unique_ptr<MultiFileReader> DeltaMultiFileReader::CreateInstance() {
 
 bool DeltaMultiFileReader::Bind(MultiFileReaderOptions &options, MultiFileList &files,
               vector<LogicalType> &return_types, vector<string> &names, MultiFileReaderBindData &bind_data)  {
-    auto &delta_table_snapshot = dynamic_cast<DeltaTableSnapshot&>(files);
+    auto &delta_snapshot = dynamic_cast<DeltaSnapshot&>(files);
 
-    delta_table_snapshot.Bind(return_types, names);
+    delta_snapshot.Bind(return_types, names);
 
     // We need to parse this option
     bool file_row_number_enabled = options.custom_options.find("file_row_number") != options.custom_options.end();
@@ -344,7 +344,7 @@ void DeltaMultiFileReader::FinalizeBind(const MultiFileReaderOptions &file_optio
 
     // Get the metadata for this file
     D_ASSERT(global_state->file_list);
-    const auto &snapshot = dynamic_cast<const DeltaTableSnapshot&>(*global_state->file_list);
+    const auto &snapshot = dynamic_cast<const DeltaSnapshot&>(*global_state->file_list);
     auto &file_metadata = snapshot.metadata[reader_data.file_list_idx.GetIndex()];
 
     if (!file_metadata.partition_map.empty()) {
@@ -365,7 +365,7 @@ unique_ptr<MultiFileList> DeltaMultiFileReader::CreateFileList(ClientContext &co
         throw BinderException("'delta_scan' only supports single path as input");
     }
 
-    return make_uniq<DeltaTableSnapshot>(context, paths[0]);
+    return make_uniq<DeltaSnapshot>(context, paths[0]);
 }
 
 // Generate the correct Selection Vector Based on the Raw delta KernelBoolSlice dv and the row_id_column
@@ -510,7 +510,7 @@ void DeltaMultiFileReader::FinalizeChunk(ClientContext &context, const MultiFile
     D_ASSERT(delta_global_state.file_list);
 
     // Get the metadata for this file
-    const auto &snapshot = dynamic_cast<const DeltaTableSnapshot&>(*global_state->file_list);
+    const auto &snapshot = dynamic_cast<const DeltaSnapshot&>(*global_state->file_list);
     auto &metadata = snapshot.metadata[reader_data.file_list_idx.GetIndex()];
 
     if (metadata.selection_vector.ptr && chunk.size() != 0) {
@@ -562,11 +562,11 @@ bool DeltaMultiFileReader::ParseOption(const string &key, const Value &val, Mult
     return MultiFileReader::ParseOption(key, val, options, context);
 }
 //
-//DeltaMultiFileReaderBindData::DeltaMultiFileReaderBindData(DeltaTableSnapshot & delta_table_snapshot): current_snapshot(delta_table_snapshot){
+//DeltaMultiFileReaderBindData::DeltaMultiFileReaderBindData(DeltaSnapshot & delta_snapshot): current_snapshot(delta_snapshot){
 //
 //}
 
-TableFunctionSet DeltatableFunctions::GetDeltaScanFunction(DatabaseInstance &instance) {
+TableFunctionSet DeltaFunctions::GetDeltaScanFunction(DatabaseInstance &instance) {
     // The delta_scan function is constructed by grabbing the parquet scan from the Catalog, then injecting the
     // DeltaMultiFileReader into it to create a Delta-based multi file read
 
@@ -588,7 +588,7 @@ TableFunctionSet DeltatableFunctions::GetDeltaScanFunction(DatabaseInstance &ins
         // Schema param is just confusing here
         function.named_parameters.erase("schema");
 
-        // Demonstration of a generated column based on information from DeltaTableSnapshot
+        // Demonstration of a generated column based on information from DeltaSnapshot
         function.named_parameters["delta_file_number"] = LogicalType::BOOLEAN;
 
         function.name = "delta_scan";
