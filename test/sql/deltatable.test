@@ -8,7 +8,7 @@ require deltatable
 
 # Simplest example
 query I
-SELECT * FROM delta_scan('delta-kernel-rs/kernel/tests/data/table-without-dv-small')
+SELECT * FROM delta_scan('./delta-kernel-rs/kernel/tests/data/table-without-dv-small')
 ----
 0
 1

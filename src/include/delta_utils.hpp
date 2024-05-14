@@ -15,14 +15,23 @@ public:
 
     static unique_ptr<FieldList> VisitSnapshotSchema(const ffi::SnapshotHandle* snapshot) {
         SchemaVisitor state;
-        ffi::EngineSchemaVisitor visitor = {
-                .data = &state,
-                .make_field_list = (uintptr_t (*)(void*, uintptr_t)) &MakeFieldList,
-                .visit_struct = (void (*)(void*, uintptr_t, ffi::KernelStringSlice, uintptr_t)) &VisitStruct,
-                .visit_string = VisitSimpleType<LogicalType::VARCHAR>(),
-                .visit_integer = VisitSimpleType<LogicalType::INTEGER>(),
-                .visit_long = VisitSimpleType<LogicalType::BIGINT>(),
-        };
+        ffi::EngineSchemaVisitor visitor;
+
+        visitor.data = &state;
+        visitor.make_field_list = (uintptr_t (*)(void*, uintptr_t)) &MakeFieldList;
+        visitor.visit_struct = (void (*)(void*, uintptr_t, ffi::KernelStringSlice, uintptr_t)) &VisitStruct;
+        visitor.visit_string = VisitSimpleType<LogicalType::VARCHAR>();
+        visitor.visit_long = VisitSimpleType<LogicalType::BIGINT>();
+        visitor.visit_integer = VisitSimpleType<LogicalType::SMALLINT>();
+        visitor.visit_byte = VisitSimpleType<LogicalType::TINYINT>();
+        visitor.visit_float = VisitSimpleType<LogicalType::FLOAT>();
+        visitor.visit_double = VisitSimpleType<LogicalType::DOUBLE>();
+        visitor.visit_boolean = VisitSimpleType<LogicalType::BOOLEAN>();
+        visitor.visit_binary = VisitSimpleType<LogicalType::VARCHAR>(); // TODO: check
+        visitor.visit_date = VisitSimpleType<LogicalType::DATE>(); // TODO: check
+        visitor.visit_timestamp = VisitSimpleType<LogicalType::TIMESTAMP>(); // TODO: check
+        visitor.visit_timestamp_ntz = VisitSimpleType<LogicalType::TIMESTAMP_TZ>(); // TODO: check
+
         uintptr_t result = visit_schema(snapshot, &visitor);
         return state.TakeFieldList(result);
     }

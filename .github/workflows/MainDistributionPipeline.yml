@@ -16,6 +16,6 @@ jobs:
     name: Build extension binaries
     uses: ./.github/workflows/_extension_distribution.yml
     with:
-      duckdb_version: v0.10.1
+      duckdb_version: main
       extension_name: deltatable
       exclude_archs: 'wasm_mvp;wasm_eh;wasm_threads;windows_amd64_rtools;windows_amd64;linux_arm64'

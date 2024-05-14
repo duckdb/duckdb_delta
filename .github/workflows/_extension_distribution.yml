@@ -151,6 +151,7 @@ jobs:
 
       - name: Setup Ccache
         uses: hendrikmuhs/ccache-action@v1.2.11 # Note: pinned due to GLIBC incompatibility in later releases
+        continue-on-error: true
         with:
           key: ${{ github.job }}-${{ matrix.duckdb_arch }}
 
@@ -164,6 +165,17 @@ jobs:
         uses: lukka/run-vcpkg@v11.1
         with:
           vcpkgGitCommitId: ${{ inputs.vcpkg_commit }}
+
+      - name: Handle OpenSSL dependency for rust build
+        run: |
+          echo "OPENSSL_ROOT_DIR=`pwd`/build/release/vcpkg_installed/${{ matrix.vcpkg_triplet }}" >> $GITHUB_ENV
+          echo "OPENSSL_DIR=`pwd`/build/release/vcpkg_installed/${{ matrix.vcpkg_triplet }}" >> $GITHUB_ENV
+          echo "OPENSSL_USE_STATIC_LIBS=true" >> $GITHUB_ENV
+
+      - name: Set Openssl dir
+        if: inputs.openssl_path != ''
+        shell: bash
+        run: |
 
       - name: Build extension
         env:
@@ -219,6 +231,7 @@ jobs:
 
       - name: Setup Ccache
         uses: hendrikmuhs/ccache-action@main
+        continue-on-error: true
         with:
           key: ${{ github.job }}-${{ matrix.duckdb_arch }}
 
@@ -237,9 +250,9 @@ jobs:
           vcpkgGitCommitId: ${{ inputs.vcpkg_commit }}
 
       - name: Install Rust cross compile dependency
-        if: ${{ matrix.osx_build_arch == 'arm64'}}
+        if: ${{ matrix.osx_build_arch == 'x86_64'}}
         run: |
-          rustup target add aarch64-apple-darwin
+          rustup target add x86_64-apple-darwin
 
       - name: Build extension
         shell: bash
@@ -249,7 +262,7 @@ jobs:
           make release
 
       - name: Test Extension
-        if: ${{ matrix.osx_build_arch == 'x86_64'}}
+        if: ${{ matrix.osx_build_arch == 'arm64'}}
         shell: bash
         run: |
           make test
@@ -312,6 +325,7 @@ jobs:
 
       - name: Setup Ccache
         uses: hendrikmuhs/ccache-action@main
+        continue-on-error: true
         with:
           key: ${{ github.job }}-${{ matrix.duckdb_arch }}
 
@@ -378,6 +392,7 @@ jobs:
 
       - name: Setup Ccache
         uses: hendrikmuhs/ccache-action@main
+        continue-on-error: true
         with:
           key: ${{ github.job }}-${{ matrix.duckdb_arch }}
 
