@@ -1,0 +1,13 @@
+diff --git a/kernel/Cargo.toml b/kernel/Cargo.toml
+index bc183f6..5f07527 100644
+--- a/kernel/Cargo.toml
++++ b/kernel/Cargo.toml
+@@ -44,7 +44,7 @@ arrow-json = { version = "^49.0", optional = true }
+ arrow-ord = { version = "^49.0", optional = true }
+ arrow-schema = { version = "^49.0", optional = true }
+ futures = { version = "0.3", optional = true }
+-object_store = { version = "^0.8.0", optional = true }
++object_store = { version = "^0.8.0", optional = true, features = [ "aws" ]}
+ # Used in default and sync engine
+ parquet = { version = "^49.0", optional = true }
+ # Used for fetching direct urls (like pre-signed urls)

@@ -6,6 +6,3 @@
 	path = extension-ci-tools
 	url = git@github.com:duckdb/extension-ci-tools.git
 	branch = main
-[submodule "delta-kernel-rs"]
-	path = delta-kernel-rs
-	url = git@github.com:delta-incubator/delta-kernel-rs.git
