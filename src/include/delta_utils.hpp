@@ -189,15 +189,15 @@ static T unpack_result_or_throw(ffi::ExternResult<T> result, const string &from_
             auto message = error_cast->error_message;
             delete error_cast;
 
-            throw InternalException("Hit DeltaKernel FFI error (from: %s): Hit error: %u (%s) with message (%s)",
+            throw IOException("Hit DeltaKernel FFI error (from: %s): Hit error: %u (%s) with message (%s)",
                                     from_where.c_str(), etype, kernel_error_to_string(etype), message);
         } else {
-            throw InternalException("Hit DeltaKernel FFI error (from: %s): Hit error, but error was nullptr", from_where.c_str());
+            throw IOException("Hit DeltaKernel FFI error (from: %s): Hit error, but error was nullptr", from_where.c_str());
         }
     } else if (result.tag == ffi::ExternResult<T>::Tag::Ok) {
         return result.ok._0;
     }
-    throw InternalException("Invalid error ExternResult tag found!");
+    throw IOException("Invalid error ExternResult tag found!");
 }
 
 template <class T>
@@ -207,7 +207,7 @@ bool result_is_ok(ffi::ExternResult<T> result) {
     } else if (result.tag == ffi::ExternResult<T>::Tag::Err) {
         return false;
     }
-    throw InternalException("Invalid error ExternResult tag found!");
+    throw IOException("Invalid error ExternResult tag found!");
 }
 
 ffi::KernelStringSlice to_delta_string_slice(const string &str) {

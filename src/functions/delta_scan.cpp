@@ -190,7 +190,7 @@ string DeltaSnapshot::GetFile(idx_t i) {
 
     // The kernel scan visitor should have resolved a file OR returned
     if(i >= resolved_files.size()) {
-        throw InternalException("Delta Kernel seems to have failed to resolve a new file");
+        throw IOException("Delta Kernel seems to have failed to resolve a new file");
     }
 
     return resolved_files[i];
@@ -403,7 +403,7 @@ void DeltaMultiFileReaderGlobalState::SetColumnIdx(const string &column, idx_t i
         delta_file_number_idx = idx;
         return;
     }
-    throw InternalException("Unknown column '%s' found as required by the DeltaMultiFileReader");
+    throw IOException("Unknown column '%s' found as required by the DeltaMultiFileReader");
 }
 
 unique_ptr<MultiFileReaderGlobalState> DeltaMultiFileReader::InitializeGlobalState(duckdb::ClientContext &context,
@@ -488,7 +488,7 @@ void DeltaMultiFileReader::CreateNameMapping(const string &file_name, const vect
         // Lookup the required column in the local map
         auto entry = name_map.find("file_row_number");
         if (entry == name_map.end()) {
-            throw InternalException("Failed to find the file_row_number column");
+            throw IOException("Failed to find the file_row_number column");
         }
 
         // Register the column to be scanned from this file
