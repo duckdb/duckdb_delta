@@ -66,10 +66,15 @@ ExternalProject_Add(
         GIT_REPOSITORY "https://github.com/delta-incubator/delta-kernel-rs"
         GIT_TAG main
         CONFIGURE_COMMAND ""
-        PATCH_COMMAND git apply < ${CMAKE_SOURCE_DIR}/../patches/delta_kernel_rs/enable_s3.patch
+        UPDATE_COMMAND ""
+        PATCH_COMMAND python3 ${CMAKE_SOURCE_DIR}/../scripts/apply_patches.py ${CMAKE_SOURCE_DIR}/../patches/delta_kernel_rs
         BUILD_IN_SOURCE 1
+        # Build debug build
         BUILD_COMMAND cargo build --package delta_kernel_ffi --all-features --target=${RUST_PLATFORM_TARGET}
+        # Build release build
         COMMAND cargo build --package delta_kernel_ffi --all-features --release --target=${RUST_PLATFORM_TARGET}
+        # Build DATs
+        COMMAND cargo build --manifest-path=${CMAKE_BINARY_DIR}/rust/src/delta_kernel/acceptance/Cargo.toml
         BUILD_BYPRODUCTS "${CMAKE_BINARY_DIR}/rust/src/delta_kernel/target/${RUST_PLATFORM_TARGET}/debug/libdelta_kernel_ffi.a"
         BUILD_BYPRODUCTS "${CMAKE_BINARY_DIR}/rust/src/delta_kernel/target/${RUST_PLATFORM_TARGET}/release/libdelta_kernel_ffi.a"
         BUILD_BYPRODUCTS "${CMAKE_BINARY_DIR}/rust/src/delta_kernel/target/ffi-headers/delta_kernel_ffi.h"

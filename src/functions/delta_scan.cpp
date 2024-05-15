@@ -115,8 +115,12 @@ static ffi::EngineBuilder* CreateBuilder(ClientContext &context, const string &p
     auto endpoint = kv_secret.TryGetValue("endpoint");
     auto session_token = kv_secret.TryGetValue("session_token");
 
-    ffi::set_builder_option(builder, to_delta_string_slice("aws_access_key_id"), to_delta_string_slice(key_id.ToString()));
-    ffi::set_builder_option(builder, to_delta_string_slice("aws_secret_access_key"), to_delta_string_slice(secret.ToString()));
+    if (!key_id.ToString().empty()) {
+        ffi::set_builder_option(builder, to_delta_string_slice("aws_access_key_id"), to_delta_string_slice(key_id.ToString()));
+    }
+    if (!secret.ToString().empty()) {
+        ffi::set_builder_option(builder, to_delta_string_slice("aws_secret_access_key"), to_delta_string_slice(secret.ToString()));
+    }
     ffi::set_builder_option(builder, to_delta_string_slice("aws_region"), to_delta_string_slice(region.ToString()));
 
     return builder;
@@ -420,6 +424,10 @@ unique_ptr<MultiFileReaderGlobalState> DeltaMultiFileReader::InitializeGlobalSta
     case_insensitive_map_t<idx_t> selected_columns;
     for (idx_t i = 0; i < global_column_ids.size(); i++) {
         auto global_id = global_column_ids[i];
+        if (IsRowIdColumnId(global_id)) {
+            continue;
+        }
+
         auto &global_name = global_names[global_id];
         selected_columns.insert({global_name, i});
     }
