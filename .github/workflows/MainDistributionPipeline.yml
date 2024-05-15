@@ -16,7 +16,7 @@ jobs:
     name: Build extension binaries
     uses: ./.github/workflows/_extension_distribution.yml # Overridden due to rust dependency during build
     with:
-      duckdb_version: main
+      duckdb_version: 01b6faf5ca
       extension_name: delta
       exclude_archs: 'wasm_mvp;wasm_eh;wasm_threads;windows_amd64_rtools;windows_amd64;linux_arm64'
 
@@ -27,6 +27,6 @@ jobs:
     secrets: inherit
     with:
       extension_name: delta
-      duckdb_version: main
+      duckdb_version: 01b6faf5ca
       exclude_archs: 'wasm_mvp;wasm_eh;wasm_threads;windows_amd64_rtools;windows_amd64;linux_arm64'
       deploy_latest: ${{ startsWith(github.ref, 'refs/tags/v') || github.ref == 'refs/heads/main' }}
