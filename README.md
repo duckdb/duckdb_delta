@@ -5,8 +5,8 @@ tables, both local and remote.
 
 # Supported platforms
 The supported platforms are:
-- linux_amd64 and linux_amd64_gcc4
-- osx_amd64 and osx_arm64
+- `linux_amd64` and `linux_amd64_gcc4`
+- `osx_amd64` and `osx_arm64`
 
 Support for the [other](https://duckdb.org/docs/extensions/working_with_extensions#platforms) DuckDB platforms is 
 work-in-progress
@@ -20,7 +20,7 @@ and the extension will be autoloaded:
 FROM delta_scan('s3://some/delta/table');
 ```
 
-Note that using DuckDB [Secrets](https://duckdb.org/docs/configuration/secrets_manager.html) is supported for authentication:
+Note that using DuckDB [Secrets](https://duckdb.org/docs/configuration/secrets_manager.html) for S3 authentication is supported:
 
 ```SQL
 CREATE SECRET (TYPE S3, provider credential_chain);
@@ -43,6 +43,7 @@ regular parquet scanning logic:
 - scanning tables with deletion vectors
 - all primitive types
 - structs
+- S3 support with secrets
 
 More features coming soon!
 
