@@ -16,17 +16,17 @@ jobs:
     name: Build extension binaries
     uses: ./.github/workflows/_extension_distribution.yml # Overridden due to rust dependency during build
     with:
-      duckdb_version: 01b6faf5ca
+      duckdb_version: v0.10.3
       extension_name: delta
       exclude_archs: 'wasm_mvp;wasm_eh;wasm_threads;windows_amd64_rtools;windows_amd64;linux_arm64'
 
   duckdb-stable-deploy:
     name: Deploy extension binaries
     needs: duckdb-stable-build
-    uses: duckdb/duckdb/.github/workflows/_extension_deploy.yml@main
+    uses: duckdb/extension-ci-tools/.github/workflows/_extension_deploy.yml@v0.10.3
     secrets: inherit
     with:
       extension_name: delta
-      duckdb_version: 01b6faf5ca
+      duckdb_version: v0.10.3
       exclude_archs: 'wasm_mvp;wasm_eh;wasm_threads;windows_amd64_rtools;windows_amd64;linux_arm64'
       deploy_latest: ${{ startsWith(github.ref, 'refs/tags/v') || github.ref == 'refs/heads/main' }}
