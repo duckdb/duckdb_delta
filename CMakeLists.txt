@@ -17,6 +17,7 @@ include_directories(duckdb/third_party/parquet)
 include_directories(duckdb/third_party/thrift)
 
 set(EXTENSION_SOURCES
+        src/inlined_parquet/parquet_extension.cpp
         src/delta_extension.cpp
         src/delta_functions.cpp
         src/functions/delta_scan.cpp)

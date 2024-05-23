@@ -91,6 +91,9 @@ struct DeltaMultiFileReaderGlobalState : public MultiFileReaderGlobalState {
     //! The idx of the file_row_number column in the result chunk
     idx_t file_row_number_idx = DConstants::INVALID_INDEX;
 
+    //! Workaround for issue with count(*) queries
+    bool mapped_row_number_to_row_idx = false;
+
     void SetColumnIdx(const string &column, idx_t idx);
 };
 

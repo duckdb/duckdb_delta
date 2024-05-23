@@ -8,6 +8,24 @@ require delta
 
 require-env DELTA_KERNEL_TESTS_PATH
 
+statement ok
+pragma enable_verification
+
+query I
+SELECT count(*) FROM delta_scan('${DELTA_KERNEL_TESTS_PATH}/table-with-dv-small/')
+----
+8
+
+query I
+SELECT count(value) FROM delta_scan('${DELTA_KERNEL_TESTS_PATH}/table-with-dv-small/')
+----
+8
+
+query II
+SELECT count(value), count(*) FROM delta_scan('${DELTA_KERNEL_TESTS_PATH}/table-with-dv-small/')
+----
+8	8
+
 # Simplest example
 query I
 FROM delta_scan('${DELTA_KERNEL_TESTS_PATH}/table-with-dv-small/')

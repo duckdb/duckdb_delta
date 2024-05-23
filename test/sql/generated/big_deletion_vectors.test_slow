@@ -17,6 +17,14 @@ SELECT sum(id) FROM parquet_scan('./data/generated/simple_sf1_with_dv/parquet/*.
 ----
 
 query I rowsort q2
+SELECT count(*) FROM delta_scan('./data/generated/simple_sf1_with_dv/delta_lake/')
+----
+
+query I rowsort q2
+SELECT count(*) FROM parquet_scan('./data/generated/simple_sf1_with_dv/parquet/*.parquet')
+----
+
+query I rowsort q3
 SELECT
     sum(l_extendedprice * l_discount) AS revenue
 FROM
@@ -28,7 +36,7 @@ WHERE
   AND l_quantity < 2400
 ----
 
-query I rowsort q2
+query I rowsort q4
 SELECT
     sum(l_extendedprice * l_discount) AS revenue
 FROM
