@@ -11,126 +11,134 @@ require-env GENERATED_DATA_AVAILABLE
 # With a projection and delta constant column
 query III
 SELECT delta_file_number, part, i
-FROM delta_scan('./data/generated/simple_partitioned/delta_lake', delta_file_number=1);
+FROM delta_scan('./data/generated/simple_partitioned/delta_lake', delta_file_number=1)
+ORDER BY i
 ----
-0	0	0
-0	0	2
-0	0	4
-0	0	6
-0	0	8
-1	1	1
-1	1	3
-1	1	5
-1	1	7
-1	1	9
+1	0	0
+0	1	1
+1	0	2
+0	1	3
+1	0	4
+0	1	5
+1	0	6
+0	1	7
+1	0	8
+0	1	9
 
 # Simplest case
 query II
-FROM delta_scan('./data/generated/simple_partitioned/delta_lake/');
+FROM delta_scan('./data/generated/simple_partitioned/delta_lake/')
+ORDER BY i
 ----
 0	0
-2	0
-4	0
-6	0
-8	0
 1	1
+2	0
 3	1
+4	0
 5	1
+6	0
 7	1
+8	0
 9	1
 
 # With a projection
 query II
 SELECT part, i
-FROM delta_scan('./data/generated/simple_partitioned/delta_lake');
+FROM delta_scan('./data/generated/simple_partitioned/delta_lake')
+ORDER BY i
 ----
 0	0
-0	2
-0	4
-0	6
-0	8
 1	1
+0	2
 1	3
+0	4
 1	5
+0	6
 1	7
+0	8
 1	9
 
 # With a projection and delta constant column
 query III
 SELECT delta_file_number, part, i
-FROM delta_scan('./data/generated/simple_partitioned/delta_lake', delta_file_number=1);
+FROM delta_scan('./data/generated/simple_partitioned/delta_lake', delta_file_number=1)
+ORDER BY i
 ----
-0	0	0
-0	0	2
-0	0	4
-0	0	6
-0	0	8
-1	1	1
-1	1	3
-1	1	5
-1	1	7
-1	1	9
+1	0	0
+0	1	1
+1	0	2
+0	1	3
+1	0	4
+0	1	5
+1	0	6
+0	1	7
+1	0	8
+0	1	9
 
 # different permutation
 query III
 SELECT part, delta_file_number, i
-FROM delta_scan('./data/generated/simple_partitioned/delta_lake', delta_file_number=1);
+FROM delta_scan('./data/generated/simple_partitioned/delta_lake', delta_file_number=1)
+ORDER BY i
 ----
-0	0	0
-0	0	2
-0	0	4
-0	0	6
-0	0	8
-1	1	1
-1	1	3
-1	1	5
-1	1	7
-1	1	9
+0	1	0
+1	0	1
+0	1	2
+1	0	3
+0	1	4
+1	0	5
+0	1	6
+1	0	7
+0	1	8
+1	0	9
 
 # different permutation again
 query III
 SELECT part, i, delta_file_number
-FROM delta_scan('./data/generated/simple_partitioned/delta_lake', delta_file_number=1);
+FROM delta_scan('./data/generated/simple_partitioned/delta_lake', delta_file_number=1)
+ORDER BY i
 ----
-0	0	0
-0	2	0
-0	4	0
-0	6	0
-0	8	0
-1	1	1
-1	3	1
-1	5	1
-1	7	1
-1	9	1
+0	0	1
+1	1	0
+0	2	1
+1	3	0
+0	4	1
+1	5	0
+0	6	1
+1	7	0
+0	8	1
+1	9	0
 
 # With a projection and both a base multifilereader column and the file_row_number option
 query IIII
 SELECT parse_filename(filename), part, i, file_row_number
-FROM delta_scan('./data/generated/simple_partitioned/delta_lake', file_row_number=1, filename=1);
+FROM delta_scan('./data/generated/simple_partitioned/delta_lake', file_row_number=1, filename=1)
+ORDER BY i
 ----
-0-acbdd600-ea69-4180-81c7-530d09bcfcfe-0.parquet	0	0	0
-0-acbdd600-ea69-4180-81c7-530d09bcfcfe-0.parquet	0	2	1
-0-acbdd600-ea69-4180-81c7-530d09bcfcfe-0.parquet	0	4	2
-0-acbdd600-ea69-4180-81c7-530d09bcfcfe-0.parquet	0	6	3
-0-acbdd600-ea69-4180-81c7-530d09bcfcfe-0.parquet	0	8	4
-0-acbdd600-ea69-4180-81c7-530d09bcfcfe-0.parquet	1	1	0
-0-acbdd600-ea69-4180-81c7-530d09bcfcfe-0.parquet	1	3	1
-0-acbdd600-ea69-4180-81c7-530d09bcfcfe-0.parquet	1	5	2
-0-acbdd600-ea69-4180-81c7-530d09bcfcfe-0.parquet	1	7	3
-0-acbdd600-ea69-4180-81c7-530d09bcfcfe-0.parquet	1	9	4
+0-5d866d26-492b-4edb-9c65-414a26b51b52-0.parquet	0	0	0
+0-5d866d26-492b-4edb-9c65-414a26b51b52-0.parquet	1	1	0
+0-5d866d26-492b-4edb-9c65-414a26b51b52-0.parquet	0	2	1
+0-5d866d26-492b-4edb-9c65-414a26b51b52-0.parquet	1	3	1
+0-5d866d26-492b-4edb-9c65-414a26b51b52-0.parquet	0	4	2
+0-5d866d26-492b-4edb-9c65-414a26b51b52-0.parquet	1	5	2
+0-5d866d26-492b-4edb-9c65-414a26b51b52-0.parquet	0	6	3
+0-5d866d26-492b-4edb-9c65-414a26b51b52-0.parquet	1	7	3
+0-5d866d26-492b-4edb-9c65-414a26b51b52-0.parquet	0	8	4
+0-5d866d26-492b-4edb-9c65-414a26b51b52-0.parquet	1	9	4
 
 # Final boss: add the delta_file_number to the mix
 query IIIII
 SELECT delta_file_number, parse_filename(filename), part, i, file_row_number
-FROM delta_scan('./data/generated/simple_partitioned/delta_lake', file_row_number=1, filename=1, delta_file_number=1);
+FROM delta_scan('./data/generated/simple_partitioned/delta_lake', file_row_number=1, filename=1, delta_file_number=1)
+ORDER BY i
 ----
-0	0-acbdd600-ea69-4180-81c7-530d09bcfcfe-0.parquet	0	0	0
-0	0-acbdd600-ea69-4180-81c7-530d09bcfcfe-0.parquet	0	2	1
-0	0-acbdd600-ea69-4180-81c7-530d09bcfcfe-0.parquet	0	4	2
-0	0-acbdd600-ea69-4180-81c7-530d09bcfcfe-0.parquet	0	6	3
-0	0-acbdd600-ea69-4180-81c7-530d09bcfcfe-0.parquet	0	8	4
-1	0-acbdd600-ea69-4180-81c7-530d09bcfcfe-0.parquet	1	1	0
-1	0-acbdd600-ea69-4180-81c7-530d09bcfcfe-0.parquet	1	3	1
-1	0-acbdd600-ea69-4180-81c7-530d09bcfcfe-0.parquet	1	5	2
-1	0-acbdd600-ea69-4180-81c7-530d09bcfcfe-0.parquet	1	7	3
-1	0-acbdd600-ea69-4180-81c7-530d09bcfcfe-0.parquet	1	9	4
+1	0-5d866d26-492b-4edb-9c65-414a26b51b52-0.parquet	0	0	0
+0	0-5d866d26-492b-4edb-9c65-414a26b51b52-0.parquet	1	1	0
+1	0-5d866d26-492b-4edb-9c65-414a26b51b52-0.parquet	0	2	1
+0	0-5d866d26-492b-4edb-9c65-414a26b51b52-0.parquet	1	3	1
+1	0-5d866d26-492b-4edb-9c65-414a26b51b52-0.parquet	0	4	2
+0	0-5d866d26-492b-4edb-9c65-414a26b51b52-0.parquet	1	5	2
+1	0-5d866d26-492b-4edb-9c65-414a26b51b52-0.parquet	0	6	3
+0	0-5d866d26-492b-4edb-9c65-414a26b51b52-0.parquet	1	7	3
+1	0-5d866d26-492b-4edb-9c65-414a26b51b52-0.parquet	0	8	4
+0	0-5d866d26-492b-4edb-9c65-414a26b51b52-0.parquet	1	9	4

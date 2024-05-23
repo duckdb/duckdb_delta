@@ -8,3 +8,6 @@ duckdb_extension_load(delta
 
 # Build the httpfs extension to test with s3/http
 duckdb_extension_load(httpfs)
+
+# Build the tpch extension for testing/benchmarking
+duckdb_extension_load(tpch)

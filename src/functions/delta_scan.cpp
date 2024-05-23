@@ -246,7 +246,6 @@ unique_ptr<MultiFileList> DeltaSnapshot::ComplexFilterPushdown(ClientContext &co
     auto filterstmp = combiner.GenerateTableScanFilters(get.column_ids);
 
     // TODO: can/should we figure out if this filtered anything?
-    // TODO2: make this copy more efficient? can we move-copy this thing leaving the old one uninitialized?
     auto filtered_list = make_uniq<DeltaSnapshot>(context, paths[0]);
     filtered_list->table_filters = std::move(filterstmp);
     filtered_list->names = names;
