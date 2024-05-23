@@ -250,7 +250,7 @@ unique_ptr<MultiFileList> DeltaSnapshot::ComplexFilterPushdown(ClientContext &co
     filtered_list->table_filters = std::move(filterstmp);
     filtered_list->names = names;
 
-    return filtered_list;
+    return std::move(filtered_list);
 }
 
 vector<string> DeltaSnapshot::GetAllFiles() {
