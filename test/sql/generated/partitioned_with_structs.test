@@ -8,16 +8,16 @@ require delta
 
 require-env GENERATED_DATA_AVAILABLE
 
-query II
+query II rowsort
 from delta_scan('./data/generated/simple_partitioned_with_structs/delta_lake');
 ----
-{'i': 1, 'j': 2}	1
-{'i': 3, 'j': 4}	1
-{'i': 5, 'j': 6}	1
-{'i': 7, 'j': 8}	1
-{'i': 9, 'j': 10}	1
 {'i': 0, 'j': 1}	0
+{'i': 1, 'j': 2}	1
 {'i': 2, 'j': 3}	0
+{'i': 3, 'j': 4}	1
 {'i': 4, 'j': 5}	0
+{'i': 5, 'j': 6}	1
 {'i': 6, 'j': 7}	0
+{'i': 7, 'j': 8}	1
 {'i': 8, 'j': 9}	0
+{'i': 9, 'j': 10}	1

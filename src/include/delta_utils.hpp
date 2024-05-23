@@ -265,7 +265,13 @@ private:
             return predicate->VisitFilter(filter.first, *filter.second, state);
         };
         auto eit = EngineIteratorFromCallable(get_next);
-        return visit_expression_and(state, &eit);
+
+        // TODO: this should be fixed upstream?
+        try {
+            return visit_expression_and(state, &eit);
+        } catch (...) {
+            return ~0;
+        }
     }
 
     uintptr_t VisitConstantFilter(const string &col_name, const ConstantFilter &filter, ffi::KernelExpressionVisitorState* state) {
@@ -291,6 +297,7 @@ private:
                 break; // unsupported type
         }
 
+        // TODO support other comparison types?
         switch (filter.comparison_type) {
             case ExpressionType::COMPARE_LESSTHAN:
                 return visit_expression_lt(state, left, right);
@@ -327,12 +334,10 @@ private:
         switch (filter.filter_type) {
             case TableFilterType::CONSTANT_COMPARISON:
                 return VisitConstantFilter(col_name, static_cast<const ConstantFilter&>(filter), state);
-
             case TableFilterType::CONJUNCTION_AND:
                 return VisitAndFilter(col_name, static_cast<const ConjunctionAndFilter&>(filter), state);
-
             default:
-                return ~0; // Unsupported filter
+                throw NotImplementedException("Attempted to push down unimplemented filter type: '%s'", EnumUtil::ToString(filter.filter_type));
         }
     }
 };
