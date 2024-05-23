@@ -36,7 +36,7 @@ WHERE
   AND l_quantity < 2400
 ----
 
-query I rowsort q4
+query I rowsort q3
 SELECT
     sum(l_extendedprice * l_discount) AS revenue
 FROM
