@@ -1,5 +1,6 @@
 #include "duckdb/function/table_function.hpp"
 
+#include "parquet_override.hpp"
 #include "delta_functions.hpp"
 #include "functions/delta_scan.hpp"
 #include "duckdb/optimizer/filter_combiner.hpp"
@@ -109,19 +110,21 @@ static ffi::EngineBuilder* CreateBuilder(ClientContext &context, const string &p
     }
     const auto &kv_secret = dynamic_cast<const KeyValueSecret &>(*secret_match.secret_entry->secret);
 
-    auto key_id = kv_secret.TryGetValue("key_id");
-    auto secret = kv_secret.TryGetValue("secret");
-    auto region = kv_secret.TryGetValue("region");
-    auto endpoint = kv_secret.TryGetValue("endpoint");
-    auto session_token = kv_secret.TryGetValue("session_token");
+    auto key_id = kv_secret.TryGetValue("key_id").ToString();
+    auto secret = kv_secret.TryGetValue("secret").ToString();
+    auto region = kv_secret.TryGetValue("region").ToString();
 
-    if (!key_id.ToString().empty()) {
-        ffi::set_builder_option(builder, to_delta_string_slice("aws_access_key_id"), to_delta_string_slice(key_id.ToString()));
+    if (key_id.empty() && secret.empty()) {
+        ffi::set_builder_option(builder, to_delta_string_slice("skip_signature"), to_delta_string_slice("true"));
     }
-    if (!secret.ToString().empty()) {
-        ffi::set_builder_option(builder, to_delta_string_slice("aws_secret_access_key"), to_delta_string_slice(secret.ToString()));
+
+    if (!key_id.empty()) {
+        ffi::set_builder_option(builder, to_delta_string_slice("aws_access_key_id"), to_delta_string_slice(key_id));
     }
-    ffi::set_builder_option(builder, to_delta_string_slice("aws_region"), to_delta_string_slice(region.ToString()));
+    if (!secret.empty()) {
+        ffi::set_builder_option(builder, to_delta_string_slice("aws_secret_access_key"), to_delta_string_slice(secret));
+    }
+    ffi::set_builder_option(builder, to_delta_string_slice("aws_region"), to_delta_string_slice(region));
 
     return builder;
 }
@@ -432,11 +435,18 @@ unique_ptr<MultiFileReaderGlobalState> DeltaMultiFileReader::InitializeGlobalSta
         selected_columns.insert({global_name, i});
     }
 
-    // The hardcoded (for now) columns to be mapped
+    // TODO: only add file_row_number column if there are deletes
     case_insensitive_map_t<LogicalType> columns_to_map = {
             {"file_row_number", LogicalType::BIGINT},
-            {"delta_file_number", LogicalType::UBIGINT}
     };
+
+    // Add the delta_file_number column to the columns to map
+    auto demo_gen_col_opt = file_options.custom_options.find("delta_file_number");
+    if (demo_gen_col_opt != file_options.custom_options.end()) {
+        if (demo_gen_col_opt->second.GetValue<bool>()) {
+            columns_to_map.insert({"delta_file_number", LogicalType::UBIGINT});
+        }
+    }
 
     // Map every column to either a column in the projection, or add it to the extra columns if it doesn't exist
     idx_t col_offset = 0;
@@ -578,8 +588,11 @@ TableFunctionSet DeltaFunctions::GetDeltaScanFunction(DatabaseInstance &instance
     // The delta_scan function is constructed by grabbing the parquet scan from the Catalog, then injecting the
     // DeltaMultiFileReader into it to create a Delta-based multi file read
 
-    auto &parquet_scan = ExtensionUtil::GetTableFunction(instance, "parquet_scan");
-    auto parquet_scan_copy = parquet_scan.functions;
+    // FIXME revert when all required changes are applied upstream
+//    auto &parquet_scan = ExtensionUtil::GetTableFunction(instance, "parquet_scan");
+//    auto parquet_scan_copy = parquet_scan.functions;
+    auto parquet_scan_copy = ParquetOverrideFunction::GetFunctionSet();
+
     for (auto &function : parquet_scan_copy.functions) {
         // Register the MultiFileReader as the driver for reads
         function.get_multi_file_reader = DeltaMultiFileReader::CreateInstance;

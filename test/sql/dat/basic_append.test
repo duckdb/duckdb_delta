@@ -14,6 +14,18 @@ require-env DAT_PATH
 # - part-00000-c156ac8b-f738-4479-803d-750072dd4c51-c000.snappy.parquet
 # 	- contains letters d,e
 
+query I
+SELECT count(*)
+FROM delta_scan('${DAT_PATH}/out/reader_tests/generated/basic_append/delta')
+----
+5
+
+query I
+SELECT count(number)
+FROM delta_scan('${DAT_PATH}/out/reader_tests/generated/basic_append/delta')
+----
+5
+
 query III
 SELECT *
 FROM delta_scan('${DAT_PATH}/out/reader_tests/generated/basic_append/delta')
