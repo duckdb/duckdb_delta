@@ -64,7 +64,7 @@ endif()
 ExternalProject_Add(
         ${KERNEL_NAME}
         GIT_REPOSITORY "https://github.com/delta-incubator/delta-kernel-rs"
-        GIT_TAG main
+        GIT_TAG e49bf519fb2a01f1b3eb78ef53d50fc70bda3142
         CONFIGURE_COMMAND ""
         UPDATE_COMMAND ""
         PATCH_COMMAND python3 ${CMAKE_SOURCE_DIR}/../scripts/apply_patches.py ${CMAKE_SOURCE_DIR}/../patches/delta_kernel_rs
