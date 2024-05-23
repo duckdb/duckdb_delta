@@ -110,19 +110,21 @@ static ffi::EngineBuilder* CreateBuilder(ClientContext &context, const string &p
     }
     const auto &kv_secret = dynamic_cast<const KeyValueSecret &>(*secret_match.secret_entry->secret);
 
-    auto key_id = kv_secret.TryGetValue("key_id");
-    auto secret = kv_secret.TryGetValue("secret");
-    auto region = kv_secret.TryGetValue("region");
-    auto endpoint = kv_secret.TryGetValue("endpoint");
-    auto session_token = kv_secret.TryGetValue("session_token");
+    auto key_id = kv_secret.TryGetValue("key_id").ToString();
+    auto secret = kv_secret.TryGetValue("secret").ToString();
+    auto region = kv_secret.TryGetValue("region").ToString();
 
-    if (!key_id.ToString().empty()) {
-        ffi::set_builder_option(builder, to_delta_string_slice("aws_access_key_id"), to_delta_string_slice(key_id.ToString()));
+    if (key_id.empty() && secret.empty()) {
+        ffi::set_builder_option(builder, to_delta_string_slice("skip_signature"), to_delta_string_slice("true"));
     }
-    if (!secret.ToString().empty()) {
-        ffi::set_builder_option(builder, to_delta_string_slice("aws_secret_access_key"), to_delta_string_slice(secret.ToString()));
+
+    if (!key_id.empty()) {
+        ffi::set_builder_option(builder, to_delta_string_slice("aws_access_key_id"), to_delta_string_slice(key_id));
     }
-    ffi::set_builder_option(builder, to_delta_string_slice("aws_region"), to_delta_string_slice(region.ToString()));
+    if (!secret.empty()) {
+        ffi::set_builder_option(builder, to_delta_string_slice("aws_secret_access_key"), to_delta_string_slice(secret));
+    }
+    ffi::set_builder_option(builder, to_delta_string_slice("aws_region"), to_delta_string_slice(region));
 
     return builder;
 }
