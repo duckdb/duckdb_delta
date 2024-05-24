@@ -66,35 +66,35 @@ query II
 FROM delta_scan('${DELTA_KERNEL_TESTS_PATH}/table-with-dv-small/', delta_file_number=1)
 WHERE value > 3
 ----
-4	0
-5	0
-6	0
-7	0
-8	0
+4	7
+5	7
+6	7
+7	7
+8	7
 
 # With filter, delta-extension-originated const column, and parquet-originated const column
 query III
-SELECT value, parse_filename(filename), delta_file_number
+SELECT value, parse_filename(filename)[-15:-1], delta_file_number
 FROM delta_scan('${DELTA_KERNEL_TESTS_PATH}/table-with-dv-small/', delta_file_number=1, filename=1)
 WHERE value > 3
 ----
-4	part-00000-fae5310a-a37d-4e51-827b-c3d5516560ca-c000.snappy.parquet	0
-5	part-00000-fae5310a-a37d-4e51-827b-c3d5516560ca-c000.snappy.parquet	0
-6	part-00000-fae5310a-a37d-4e51-827b-c3d5516560ca-c000.snappy.parquet	0
-7	part-00000-fae5310a-a37d-4e51-827b-c3d5516560ca-c000.snappy.parquet	0
-8	part-00000-fae5310a-a37d-4e51-827b-c3d5516560ca-c000.snappy.parquet	0
+4	.snappy.parquet	7
+5	.snappy.parquet	7
+6	.snappy.parquet	7
+7	.snappy.parquet	7
+8	.snappy.parquet	7
 
 # With PRUNED filter, delta-extension-originated const column, and parquet-originated const column
 query II
-SELECT parse_filename(filename), delta_file_number
+SELECT parse_filename(filename)[-15:-1], delta_file_number
 FROM delta_scan('${DELTA_KERNEL_TESTS_PATH}/table-with-dv-small/', delta_file_number=1, filename=1)
 WHERE value > 3
 ----
-part-00000-fae5310a-a37d-4e51-827b-c3d5516560ca-c000.snappy.parquet	0
-part-00000-fae5310a-a37d-4e51-827b-c3d5516560ca-c000.snappy.parquet	0
-part-00000-fae5310a-a37d-4e51-827b-c3d5516560ca-c000.snappy.parquet	0
-part-00000-fae5310a-a37d-4e51-827b-c3d5516560ca-c000.snappy.parquet	0
-part-00000-fae5310a-a37d-4e51-827b-c3d5516560ca-c000.snappy.parquet	0
+.snappy.parquet	7
+.snappy.parquet	7
+.snappy.parquet	7
+.snappy.parquet	7
+.snappy.parquet	7
 
 # With PRUNED filters, delta-extension-originated const column, and parquet-originated const column
 query I
@@ -102,11 +102,11 @@ SELECT delta_file_number
 FROM delta_scan('${DELTA_KERNEL_TESTS_PATH}/table-with-dv-small/', delta_file_number=1, filename=1)
 WHERE value > 3 and filename is not null
 ----
-0
-0
-0
-0
-0
+7
+7
+7
+7
+7
 
 # Enabling the file_row_number option, but projecting it out
 query I

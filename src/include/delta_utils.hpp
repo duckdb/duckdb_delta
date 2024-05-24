@@ -237,6 +237,38 @@ ffi::EngineIterator EngineIteratorFromCallable(Callable& callable) {
     return {.data = &callable, .get_next = (const void *(*)(void*)) get_next};
 };
 
+// Helper function to prevent pushing down filters kernel cant handle
+// TODO: remove once kernel handles this properly?
+static bool CanHandleFilter(TableFilter *filter) {
+        switch (filter->filter_type) {
+            case TableFilterType::CONSTANT_COMPARISON:
+                return true;
+            case TableFilterType::CONJUNCTION_AND: {
+                auto &conjunction = static_cast<const ConjunctionAndFilter&>(*filter);
+                bool can_handle = true;
+                for (const auto& child : conjunction.child_filters) {
+                    can_handle = can_handle && CanHandleFilter(child.get());
+                }
+                return can_handle;
+            }
+
+            default:
+                return false;
+        }
+}
+
+// Prunes the list of predicates to ones that we can handle
+static std::map<string, TableFilter*> PrunePredicates(std::map<string, TableFilter*> predicates) {
+    std::map<string, TableFilter*> result;
+    for (const auto &predicate : predicates) {
+        if (CanHandleFilter(predicate.second)) {
+            result[predicate.first] = predicate.second;
+        }
+
+    }
+    return result;
+}
+
 class PredicateVisitor : public ffi::EnginePredicate {
 public:
     PredicateVisitor(const vector<string> &column_names, optional_ptr<TableFilterSet> filters) : EnginePredicate {
@@ -254,7 +286,8 @@ private:
     std::map<string, TableFilter*> column_filters;
 
     static uintptr_t VisitPredicate(PredicateVisitor* predicate, ffi::KernelExpressionVisitorState* state) {
-        auto& filters = predicate->column_filters;
+        auto filters = PrunePredicates(predicate->column_filters);
+
         auto it = filters.begin();
         auto end = filters.end();
         auto get_next = [predicate, state, &it, &end]() -> uintptr_t {

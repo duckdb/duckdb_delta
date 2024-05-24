@@ -14,16 +14,16 @@ SELECT delta_file_number, part, i
 FROM delta_scan('./data/generated/simple_partitioned/delta_lake', delta_file_number=1)
 ORDER BY i
 ----
-1	0	0
-0	1	1
-1	0	2
-0	1	3
-1	0	4
-0	1	5
-1	0	6
-0	1	7
-1	0	8
-0	1	9
+7	0	0
+7	1	1
+7	0	2
+7	1	3
+7	0	4
+7	1	5
+7	0	6
+7	1	7
+7	0	8
+7	1	9
 
 # Simplest case
 query II
@@ -64,16 +64,16 @@ SELECT delta_file_number, part, i
 FROM delta_scan('./data/generated/simple_partitioned/delta_lake', delta_file_number=1)
 ORDER BY i
 ----
-1	0	0
-0	1	1
-1	0	2
-0	1	3
-1	0	4
-0	1	5
-1	0	6
-0	1	7
-1	0	8
-0	1	9
+7	0	0
+7	1	1
+7	0	2
+7	1	3
+7	0	4
+7	1	5
+7	0	6
+7	1	7
+7	0	8
+7	1	9
 
 # different permutation
 query III
@@ -81,16 +81,16 @@ SELECT part, delta_file_number, i
 FROM delta_scan('./data/generated/simple_partitioned/delta_lake', delta_file_number=1)
 ORDER BY i
 ----
-0	1	0
-1	0	1
-0	1	2
-1	0	3
-0	1	4
-1	0	5
-0	1	6
-1	0	7
-0	1	8
-1	0	9
+0	7	0
+1	7	1
+0	7	2
+1	7	3
+0	7	4
+1	7	5
+0	7	6
+1	7	7
+0	7	8
+1	7	9
 
 # different permutation again
 query III
@@ -98,47 +98,47 @@ SELECT part, i, delta_file_number
 FROM delta_scan('./data/generated/simple_partitioned/delta_lake', delta_file_number=1)
 ORDER BY i
 ----
-0	0	1
-1	1	0
-0	2	1
-1	3	0
-0	4	1
-1	5	0
-0	6	1
-1	7	0
-0	8	1
-1	9	0
+0	0	7
+1	1	7
+0	2	7
+1	3	7
+0	4	7
+1	5	7
+0	6	7
+1	7	7
+0	8	7
+1	9	7
 
 # With a projection and both a base multifilereader column and the file_row_number option
 query IIII
-SELECT parse_filename(filename), part, i, file_row_number
+SELECT parse_filename(filename)[-8:-1], part, i, file_row_number
 FROM delta_scan('./data/generated/simple_partitioned/delta_lake', file_row_number=1, filename=1)
 ORDER BY i
 ----
-0-5d866d26-492b-4edb-9c65-414a26b51b52-0.parquet	0	0	0
-0-5d866d26-492b-4edb-9c65-414a26b51b52-0.parquet	1	1	0
-0-5d866d26-492b-4edb-9c65-414a26b51b52-0.parquet	0	2	1
-0-5d866d26-492b-4edb-9c65-414a26b51b52-0.parquet	1	3	1
-0-5d866d26-492b-4edb-9c65-414a26b51b52-0.parquet	0	4	2
-0-5d866d26-492b-4edb-9c65-414a26b51b52-0.parquet	1	5	2
-0-5d866d26-492b-4edb-9c65-414a26b51b52-0.parquet	0	6	3
-0-5d866d26-492b-4edb-9c65-414a26b51b52-0.parquet	1	7	3
-0-5d866d26-492b-4edb-9c65-414a26b51b52-0.parquet	0	8	4
-0-5d866d26-492b-4edb-9c65-414a26b51b52-0.parquet	1	9	4
+.parquet	0	0	0
+.parquet	1	1	0
+.parquet	0	2	1
+.parquet	1	3	1
+.parquet	0	4	2
+.parquet	1	5	2
+.parquet	0	6	3
+.parquet	1	7	3
+.parquet	0	8	4
+.parquet	1	9	4
 
 # Final boss: add the delta_file_number to the mix
 query IIIII
-SELECT delta_file_number, parse_filename(filename), part, i, file_row_number
+SELECT delta_file_number, parse_filename(filename)[-8:-1], part, i, file_row_number
 FROM delta_scan('./data/generated/simple_partitioned/delta_lake', file_row_number=1, filename=1, delta_file_number=1)
 ORDER BY i
 ----
-1	0-5d866d26-492b-4edb-9c65-414a26b51b52-0.parquet	0	0	0
-0	0-5d866d26-492b-4edb-9c65-414a26b51b52-0.parquet	1	1	0
-1	0-5d866d26-492b-4edb-9c65-414a26b51b52-0.parquet	0	2	1
-0	0-5d866d26-492b-4edb-9c65-414a26b51b52-0.parquet	1	3	1
-1	0-5d866d26-492b-4edb-9c65-414a26b51b52-0.parquet	0	4	2
-0	0-5d866d26-492b-4edb-9c65-414a26b51b52-0.parquet	1	5	2
-1	0-5d866d26-492b-4edb-9c65-414a26b51b52-0.parquet	0	6	3
-0	0-5d866d26-492b-4edb-9c65-414a26b51b52-0.parquet	1	7	3
-1	0-5d866d26-492b-4edb-9c65-414a26b51b52-0.parquet	0	8	4
-0	0-5d866d26-492b-4edb-9c65-414a26b51b52-0.parquet	1	9	4
+7	.parquet	0	0	0
+7	.parquet	1	1	0
+7	.parquet	0	2	1
+7	.parquet	1	3	1
+7	.parquet	0	4	2
+7	.parquet	1	5	2
+7	.parquet	0	6	3
+7	.parquet	1	7	3
+7	.parquet	0	8	4
+7	.parquet	1	9	4

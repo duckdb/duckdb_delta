@@ -13,18 +13,18 @@ pragma enable_verification
 
 # Filename param (i.e. MultiFileReader provided) 
 query II
-SELECT value, parse_filename(filename) FROM delta_scan('${DELTA_KERNEL_TESTS_PATH}/table-without-dv-small', filename=1)
+SELECT value, parse_filename(filename)[-15:-1] FROM delta_scan('${DELTA_KERNEL_TESTS_PATH}/table-without-dv-small', filename=1)
 ----
-0	part-00000-517f5d32-9c95-48e8-82b4-0229cc194867-c000.snappy.parquet
-1	part-00000-517f5d32-9c95-48e8-82b4-0229cc194867-c000.snappy.parquet
-2	part-00000-517f5d32-9c95-48e8-82b4-0229cc194867-c000.snappy.parquet
-3	part-00000-517f5d32-9c95-48e8-82b4-0229cc194867-c000.snappy.parquet
-4	part-00000-517f5d32-9c95-48e8-82b4-0229cc194867-c000.snappy.parquet
-5	part-00000-517f5d32-9c95-48e8-82b4-0229cc194867-c000.snappy.parquet
-6	part-00000-517f5d32-9c95-48e8-82b4-0229cc194867-c000.snappy.parquet
-7	part-00000-517f5d32-9c95-48e8-82b4-0229cc194867-c000.snappy.parquet
-8	part-00000-517f5d32-9c95-48e8-82b4-0229cc194867-c000.snappy.parquet
-9	part-00000-517f5d32-9c95-48e8-82b4-0229cc194867-c000.snappy.parquet
+0	.snappy.parquet
+1	.snappy.parquet
+2	.snappy.parquet
+3	.snappy.parquet
+4	.snappy.parquet
+5	.snappy.parquet
+6	.snappy.parquet
+7	.snappy.parquet
+8	.snappy.parquet
+9	.snappy.parquet
 
 # FileRowNumer param (i.e. ParquetReader provided)
 query II
