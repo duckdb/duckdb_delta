@@ -50,4 +50,4 @@ jobs:
       - name: Test
         shell: bash
         run: |
-          make test
+          GENERATED_DATA_AVAILABLE=1 make test
