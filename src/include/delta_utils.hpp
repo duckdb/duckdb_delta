@@ -13,14 +13,14 @@ class SchemaVisitor {
 public:
     using FieldList = child_list_t<LogicalType>;
 
-    static unique_ptr<FieldList> VisitSnapshotSchema(const ffi::SnapshotHandle* snapshot) {
+    static unique_ptr<FieldList> VisitSnapshotSchema(ffi::SharedSnapshot* snapshot) {
         SchemaVisitor state;
         ffi::EngineSchemaVisitor visitor;
 
         visitor.data = &state;
         visitor.make_field_list = (uintptr_t (*)(void*, uintptr_t)) &MakeFieldList;
         visitor.visit_struct = (void (*)(void*, uintptr_t, ffi::KernelStringSlice, uintptr_t)) &VisitStruct;
-        visitor.visit_decimal = (void (*)(void*, uintptr_t, ffi::KernelStringSlice, uint8_t , int8_t)) &VisitDecimal;
+        visitor.visit_decimal = (void (*)(void*, uintptr_t, ffi::KernelStringSlice, uint8_t , uint8_t)) &VisitDecimal;
         visitor.visit_string = VisitSimpleType<LogicalType::VARCHAR>();
         visitor.visit_long = VisitSimpleType<LogicalType::BIGINT>();
         visitor.visit_integer = VisitSimpleType<LogicalType::INTEGER>();
@@ -53,7 +53,7 @@ private:
         state->AppendToList(sibling_list_id, name, TypeId);
     }
 
-    static void VisitDecimal(SchemaVisitor* state, uintptr_t sibling_list_id, ffi::KernelStringSlice name, uint8_t precision, int8_t scale) {
+    static void VisitDecimal(SchemaVisitor* state, uintptr_t sibling_list_id, ffi::KernelStringSlice name, uint8_t precision, uint8_t scale) {
         state->AppendToList(sibling_list_id, name, LogicalType::DECIMAL(precision, scale));
     }
 
