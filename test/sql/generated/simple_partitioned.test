@@ -111,34 +111,34 @@ ORDER BY i
 
 # With a projection and both a base multifilereader column and the file_row_number option
 query IIII
-SELECT parse_filename(filename), part, i, file_row_number
+SELECT parse_filename(filename)[-8:-1], part, i, file_row_number
 FROM delta_scan('./data/generated/simple_partitioned/delta_lake', file_row_number=1, filename=1)
 ORDER BY i
 ----
-0-5d866d26-492b-4edb-9c65-414a26b51b52-0.parquet	0	0	0
-0-5d866d26-492b-4edb-9c65-414a26b51b52-0.parquet	1	1	0
-0-5d866d26-492b-4edb-9c65-414a26b51b52-0.parquet	0	2	1
-0-5d866d26-492b-4edb-9c65-414a26b51b52-0.parquet	1	3	1
-0-5d866d26-492b-4edb-9c65-414a26b51b52-0.parquet	0	4	2
-0-5d866d26-492b-4edb-9c65-414a26b51b52-0.parquet	1	5	2
-0-5d866d26-492b-4edb-9c65-414a26b51b52-0.parquet	0	6	3
-0-5d866d26-492b-4edb-9c65-414a26b51b52-0.parquet	1	7	3
-0-5d866d26-492b-4edb-9c65-414a26b51b52-0.parquet	0	8	4
-0-5d866d26-492b-4edb-9c65-414a26b51b52-0.parquet	1	9	4
+.parquet	0	0	0
+.parquet	1	1	0
+.parquet	0	2	1
+.parquet	1	3	1
+.parquet	0	4	2
+.parquet	1	5	2
+.parquet	0	6	3
+.parquet	1	7	3
+.parquet	0	8	4
+.parquet	1	9	4
 
 # Final boss: add the delta_file_number to the mix
 query IIIII
-SELECT delta_file_number, parse_filename(filename), part, i, file_row_number
+SELECT delta_file_number, parse_filename(filename)[-8:-1], part, i, file_row_number
 FROM delta_scan('./data/generated/simple_partitioned/delta_lake', file_row_number=1, filename=1, delta_file_number=1)
 ORDER BY i
 ----
-7	0-5d866d26-492b-4edb-9c65-414a26b51b52-0.parquet	0	0	0
-7	0-5d866d26-492b-4edb-9c65-414a26b51b52-0.parquet	1	1	0
-7	0-5d866d26-492b-4edb-9c65-414a26b51b52-0.parquet	0	2	1
-7	0-5d866d26-492b-4edb-9c65-414a26b51b52-0.parquet	1	3	1
-7	0-5d866d26-492b-4edb-9c65-414a26b51b52-0.parquet	0	4	2
-7	0-5d866d26-492b-4edb-9c65-414a26b51b52-0.parquet	1	5	2
-7	0-5d866d26-492b-4edb-9c65-414a26b51b52-0.parquet	0	6	3
-7	0-5d866d26-492b-4edb-9c65-414a26b51b52-0.parquet	1	7	3
-7	0-5d866d26-492b-4edb-9c65-414a26b51b52-0.parquet	0	8	4
-7	0-5d866d26-492b-4edb-9c65-414a26b51b52-0.parquet	1	9	4
+7	.parquet	0	0	0
+7	.parquet	1	1	0
+7	.parquet	0	2	1
+7	.parquet	1	3	1
+7	.parquet	0	4	2
+7	.parquet	1	5	2
+7	.parquet	0	6	3
+7	.parquet	1	7	3
+7	.parquet	0	8	4
+7	.parquet	1	9	4
