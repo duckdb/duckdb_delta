@@ -545,7 +545,7 @@ void DeltaMultiFileReader::FinalizeChunk(ClientContext &context, const MultiFile
         //! Create Dummy expression (0 + file_number)
         vector<unique_ptr<ParsedExpression>> child_expr;
         child_expr.push_back(make_uniq<ConstantExpression>(Value::UBIGINT(0)));
-        child_expr.push_back(make_uniq<ConstantExpression>(Value::UBIGINT(metadata->file_number)));
+        child_expr.push_back(make_uniq<ConstantExpression>(Value::UBIGINT(7)));
         unique_ptr<ParsedExpression> expr = make_uniq<FunctionExpression>("+", std::move(child_expr), nullptr, nullptr, false, true);
 
         //! s dummy expression
