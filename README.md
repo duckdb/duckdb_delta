@@ -12,10 +12,9 @@ Support for the [other](https://duckdb.org/docs/extensions/working_with_extensio
 work-in-progress
 
 # How to use
-**NOTE:** this extension is not yet available, it will be available from DuckDB's upcoming (v0.10.3) release
+**NOTE: this extension requires the latest stable version of DuckDB, v0.10.3.**
 
-This extension is distributed as a binary extension. To use it, simply use one of its functions from DuckDB (>= v0.10.3)
-and the extension will be autoloaded:
+This extension is distributed as a binary extension. To use it, simply use one of its functions from DuckDB and the extension will be autoloaded:
 ```SQL
 FROM delta_scan('s3://some/delta/table');
 ```
