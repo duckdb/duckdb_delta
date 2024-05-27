@@ -32,7 +32,7 @@ static void* allocate_string(const struct ffi::KernelStringSlice slice) {
     return new string(slice.ptr, slice.len);
 }
 
-static void visit_callback(ffi::NullableCvoid engine_context, const struct ffi::KernelStringSlice path, int64_t size, const ffi::DvInfo *dv_info, struct ffi::CStringMap *partition_values) {
+static void visit_callback(ffi::NullableCvoid engine_context, struct ffi::KernelStringSlice path, int64_t size, const ffi::DvInfo *dv_info, const struct ffi::CStringMap *partition_values) {
     auto context = (DeltaSnapshot *) engine_context;
     auto path_string =  context->GetPath() + "/" + from_delta_string_slice(path);
 
@@ -49,7 +49,7 @@ static void visit_callback(ffi::NullableCvoid engine_context, const struct ffi::
     context->metadata.back()->file_number = context->resolved_files.size() - 1;
 
     // Fetch the deletion vector
-    auto selection_vector_res = ffi::selection_vector_from_dv(dv_info, context->table_client, context->global_state);
+    auto selection_vector_res = ffi::selection_vector_from_dv(dv_info, context->extern_engine, context->global_state);
     auto selection_vector = unpack_result_or_throw(selection_vector_res, "selection_vector_from_dv for path " + context->GetPath());
     if (selection_vector.ptr) {
         context->metadata.back()->selection_vector = selection_vector;
@@ -69,7 +69,7 @@ static void visit_callback(ffi::NullableCvoid engine_context, const struct ffi::
     context->metadata.back()->partition_map = std::move(constant_map);
 }
 
-static void visit_data(void *engine_context, struct ffi::EngineDataHandle *engine_data, const struct ffi::KernelBoolSlice selection_vec) {
+  static void visit_data(void *engine_context, ffi::EngineData* engine_data, const struct ffi::KernelBoolSlice selection_vec) {
 //    printf("Got some data\n");
 //    printf("  Of this data, here is a selection vector\n");
 //    print_selection_vector("    ", &selection_vec);
@@ -208,19 +208,19 @@ void DeltaSnapshot::InitializeFiles() {
 
     auto interface_builder = CreateBuilder(context, paths[0]);
     auto engine_interface_res = ffi::builder_build(interface_builder);
-    table_client = unpack_result_or_throw(engine_interface_res, "get_default_client in DeltaScanScanBind");
+    extern_engine = unpack_result_or_throw(engine_interface_res, "get_default_client in DeltaScanScanBind");
 
     // Alternatively we can do the default client like so:
-//    auto table_client_res = ffi::get_default_client(path_slice, error_allocator);
-//    table_client = unpack_result_or_throw(table_client_res, "get_default_client in DeltaScanScanBind");
+//    auto extern_engine_res = ffi::get_default_client(path_slice, error_allocator);
+//    extern_engine = unpack_result_or_throw(extern_engine_res, "get_default_client in DeltaScanScanBind");
 
     // Initialize Snapshot
-    auto snapshot_res = ffi::snapshot(path_slice, table_client);
+    auto snapshot_res = ffi::snapshot(path_slice, extern_engine);
     snapshot = unpack_result_or_throw(snapshot_res, "snapshot in DeltaScanScanBind");
 
     PredicateVisitor visitor(names, &table_filters);
 
-    auto scan_res = ffi::scan(snapshot, table_client, &visitor);
+    auto scan_res = ffi::scan(snapshot, extern_engine, &visitor);
     scan = unpack_result_or_throw(scan_res, "scan in DeltaScanScanBind");
 
     global_state = ffi::get_global_scan_state(scan);
@@ -228,7 +228,7 @@ void DeltaSnapshot::InitializeFiles() {
     // Set version
     this->version = ffi::version(snapshot);
 
-    auto scan_iterator_res = ffi::kernel_scan_data_init(table_client, scan);
+    auto scan_iterator_res = ffi::kernel_scan_data_init(extern_engine, scan);
     scan_data_iterator = {
             unpack_result_or_throw(scan_iterator_res, "kernel_scan_data_init in InitFiles"),
             ffi::kernel_scan_data_free

@@ -62,11 +62,11 @@ public:
     idx_t version;
 
     //! Delta Kernel Structures
-    const ffi::SnapshotHandle *snapshot;
-    const ffi::ExternEngineHandle *table_client;
-    ffi::Scan* scan;
-    ffi::GlobalScanState *global_state;
-    UniqueKernelPointer <ffi::KernelScanDataIterator> scan_data_iterator;
+    ffi::SharedSnapshot* snapshot;
+    ffi::SharedExternEngine* extern_engine;
+    ffi::SharedScan* scan;
+    ffi::SharedGlobalScanState* global_state;
+    UniqueKernelPointer <ffi::SharedScanDataIterator> scan_data_iterator;
 
     //! Names
     vector<string> names;
