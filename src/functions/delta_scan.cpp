@@ -34,7 +34,9 @@ static void* allocate_string(const struct ffi::KernelStringSlice slice) {
 
 static void visit_callback(ffi::NullableCvoid engine_context, struct ffi::KernelStringSlice path, int64_t size, const ffi::DvInfo *dv_info, const struct ffi::CStringMap *partition_values) {
     auto context = (DeltaSnapshot *) engine_context;
-    auto path_string =  context->GetPath() + "/" + from_delta_string_slice(path);
+    auto path_string =  context->GetPath();
+    StringUtil::RTrim(path_string, "/");
+    path_string += "/" + from_delta_string_slice(path);
 
 //    printf("Fetch metadata for %s\n", path_string.c_str());
 
@@ -152,6 +154,12 @@ string DeltaSnapshot::ToDeltaPath(const string &raw_path) {
     } else {
         path = raw_path;
     }
+
+    // Paths always end in a slash (kernel likes it that way for now)
+    if (path[path.size()-1] != '/') {
+        path = path + '/';
+    }
+
     return path;
 }
 
