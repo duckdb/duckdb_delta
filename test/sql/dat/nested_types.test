@@ -1,0 +1,29 @@
+# name: test/sql/dat_primitive_types.test
+# description: DAT test suite: primitive types 
+# group: [delta]
+
+require parquet
+
+require delta
+
+require-env DAT_PATH
+
+query IIII
+SELECT *
+FROM delta_scan('${DAT_PATH}/out/reader_tests/generated/nested_types/delta')
+----
+0	{'float64': 0.0, 'bool': true}	[0]	{}
+1	{'float64': 1.0, 'bool': false}	[0, 1]	{0=0}
+2	{'float64': 2.0, 'bool': true}	[0, 1, 2]	{0=0, 1=1}
+3	{'float64': 3.0, 'bool': false}	[0, 1, 2, 3]	{0=0, 1=1, 2=2}
+4	{'float64': 4.0, 'bool': true}	[0, 1, 2, 3, 4]	{0=0, 1=1, 2=2, 3=3}
+
+query IIII
+SELECT *
+FROM parquet_scan('${DAT_PATH}/out/reader_tests/generated/nested_types/expected/**/*.parquet')
+----
+0	{'float64': 0.0, 'bool': true}	[0]	{}
+1	{'float64': 1.0, 'bool': false}	[0, 1]	{0=0}
+2	{'float64': 2.0, 'bool': true}	[0, 1, 2]	{0=0, 1=1}
+3	{'float64': 3.0, 'bool': false}	[0, 1, 2, 3]	{0=0, 1=1, 2=2}
+4	{'float64': 4.0, 'bool': true}	[0, 1, 2, 3, 4]	{0=0, 1=1, 2=2, 3=3}
