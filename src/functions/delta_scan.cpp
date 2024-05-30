@@ -22,12 +22,6 @@
 
 namespace duckdb {
 
-static void print_selection_vector(char* indent, const struct ffi::KernelBoolSlice *selection_vec) {
-    for (int i = 0; i < selection_vec->len; i++) {
-        printf("%ssel[%i] = %s\n", indent, i, selection_vec->ptr[i] ? "1" : "0");
-    }
-}
-
 static void* allocate_string(const struct ffi::KernelStringSlice slice) {
     return new string(slice.ptr, slice.len);
 }
@@ -36,9 +30,7 @@ static void visit_callback(ffi::NullableCvoid engine_context, struct ffi::Kernel
     auto context = (DeltaSnapshot *) engine_context;
     auto path_string =  context->GetPath();
     StringUtil::RTrim(path_string, "/");
-    path_string += "/" + from_delta_string_slice(path);
-
-//    printf("Fetch metadata for %s\n", path_string.c_str());
+    path_string += "/" + KernelUtils::FromDeltaString(path);
 
     // First we append the file to our resolved files
     context->resolved_files.push_back(DeltaSnapshot::ToDuckDBPath(path_string));
@@ -51,8 +43,8 @@ static void visit_callback(ffi::NullableCvoid engine_context, struct ffi::Kernel
     context->metadata.back()->file_number = context->resolved_files.size() - 1;
 
     // Fetch the deletion vector
-    auto selection_vector_res = ffi::selection_vector_from_dv(dv_info, context->extern_engine, context->global_state);
-    auto selection_vector = unpack_result_or_throw(selection_vector_res, "selection_vector_from_dv for path " + context->GetPath());
+    auto selection_vector_res = ffi::selection_vector_from_dv(dv_info, context->extern_engine.get(), context->global_state.get());
+    auto selection_vector = KernelUtils::UnpackResult(selection_vector_res, "selection_vector_from_dv for path " + context->GetPath());
     if (selection_vector.ptr) {
         context->metadata.back()->selection_vector = selection_vector;
     }
@@ -60,10 +52,9 @@ static void visit_callback(ffi::NullableCvoid engine_context, struct ffi::Kernel
     // Lookup all columns for potential hits in the constant map
     case_insensitive_map_t<string> constant_map;
     for (const auto &col: context->names) {
-        auto key = to_delta_string_slice(col);
+        auto key = KernelUtils::ToDeltaString(col);
         auto *partition_val = (string *) ffi::get_from_map(partition_values, key, allocate_string);
         if (partition_val) {
-//            printf("- %s = %s\n", col.c_str(), (*partition_val).c_str());
             constant_map[col] = *partition_val;
             delete partition_val;
         }
@@ -72,9 +63,6 @@ static void visit_callback(ffi::NullableCvoid engine_context, struct ffi::Kernel
 }
 
   static void visit_data(void *engine_context, ffi::EngineData* engine_data, const struct ffi::KernelBoolSlice selection_vec) {
-//    printf("Got some data\n");
-//    printf("  Of this data, here is a selection vector\n");
-//    print_selection_vector("    ", &selection_vec);
     ffi::visit_scan_data(engine_data, selection_vec, engine_context, visit_callback);
 }
 
@@ -83,8 +71,8 @@ static ffi::EngineBuilder* CreateBuilder(ClientContext &context, const string &p
 
     // For "regular" paths we early out with the default builder config
     if (!StringUtil::StartsWith(path, "s3://")) {
-        auto interface_builder_res = ffi::get_engine_builder(to_delta_string_slice(path), error_allocator);
-        return unpack_result_or_throw(interface_builder_res, "get_engine_interface_builder for path " + path);
+        auto interface_builder_res = ffi::get_engine_builder(KernelUtils::ToDeltaString(path), DuckDBEngineError::AllocateError);
+        return KernelUtils::UnpackResult(interface_builder_res, "get_engine_interface_builder for path " + path);
     }
 
     auto end_of_container = path.find('/',5);
@@ -95,10 +83,8 @@ static ffi::EngineBuilder* CreateBuilder(ClientContext &context, const string &p
     auto bucket = path.substr(5, end_of_container-5);
     auto path_in_bucket = path.substr(end_of_container);
 
-    auto interface_builder_res = ffi::get_engine_builder(to_delta_string_slice(path), error_allocator);
-    builder = unpack_result_or_throw(interface_builder_res, "get_engine_interface_builder for path " + path);
-
-//    ffi::set_builder_option(builder, to_delta_string_slice("aws_bucket"), to_delta_string_slice(bucket));
+    auto interface_builder_res = ffi::get_engine_builder(KernelUtils::ToDeltaString(path), DuckDBEngineError::AllocateError);
+    builder = KernelUtils::UnpackResult(interface_builder_res, "get_engine_interface_builder for path " + path);
 
     // For S3 paths we need to trim the url, set the container, and fetch a potential secret
     auto &secret_manager = SecretManager::Get(context);
@@ -117,16 +103,16 @@ static ffi::EngineBuilder* CreateBuilder(ClientContext &context, const string &p
     auto region = kv_secret.TryGetValue("region").ToString();
 
     if (key_id.empty() && secret.empty()) {
-        ffi::set_builder_option(builder, to_delta_string_slice("skip_signature"), to_delta_string_slice("true"));
+        ffi::set_builder_option(builder, KernelUtils::ToDeltaString("skip_signature"), KernelUtils::ToDeltaString("true"));
     }
 
     if (!key_id.empty()) {
-        ffi::set_builder_option(builder, to_delta_string_slice("aws_access_key_id"), to_delta_string_slice(key_id));
+        ffi::set_builder_option(builder, KernelUtils::ToDeltaString("aws_access_key_id"), KernelUtils::ToDeltaString(key_id));
     }
     if (!secret.empty()) {
-        ffi::set_builder_option(builder, to_delta_string_slice("aws_secret_access_key"), to_delta_string_slice(secret));
+        ffi::set_builder_option(builder, KernelUtils::ToDeltaString("aws_secret_access_key"), KernelUtils::ToDeltaString(secret));
     }
-    ffi::set_builder_option(builder, to_delta_string_slice("aws_region"), to_delta_string_slice(region));
+    ffi::set_builder_option(builder, KernelUtils::ToDeltaString("aws_region"), KernelUtils::ToDeltaString(region));
 
     return builder;
 }
@@ -167,7 +153,7 @@ void DeltaSnapshot::Bind(vector<LogicalType> &return_types, vector<string> &name
     if (!initialized) {
         InitializeFiles();
     }
-    auto schema = SchemaVisitor::VisitSnapshotSchema(snapshot);
+    auto schema = SchemaVisitor::VisitSnapshotSchema(snapshot.get());
     for (const auto &field: *schema) {
         names.push_back(field.first);
         return_types.push_back(field.second);
@@ -194,7 +180,7 @@ string DeltaSnapshot::GetFile(idx_t i) {
 
         auto have_scan_data_res = ffi::kernel_scan_data_next(scan_data_iterator.get(), this, visit_data);
 
-        auto have_scan_data = unpack_result_or_throw(have_scan_data_res, "kernel_scan_data_next in DeltaSnapshot GetFile");
+        auto have_scan_data = TryUnpackKernelResult(have_scan_data_res);
 
         // TODO: shouldn't the kernel always return false here?
         if (!have_scan_data || resolved_files.size() == size_before) {
@@ -212,35 +198,27 @@ string DeltaSnapshot::GetFile(idx_t i) {
 }
 
 void DeltaSnapshot::InitializeFiles() {
-    auto path_slice = to_delta_string_slice(paths[0]);
+    auto path_slice = KernelUtils::ToDeltaString(paths[0]);
 
+    // Register engine
     auto interface_builder = CreateBuilder(context, paths[0]);
-    auto engine_interface_res = ffi::builder_build(interface_builder);
-    extern_engine = unpack_result_or_throw(engine_interface_res, "get_default_client in DeltaScanScanBind");
-
-    // Alternatively we can do the default client like so:
-//    auto extern_engine_res = ffi::get_default_client(path_slice, error_allocator);
-//    extern_engine = unpack_result_or_throw(extern_engine_res, "get_default_client in DeltaScanScanBind");
+    extern_engine = TryUnpackKernelResult( ffi::builder_build(interface_builder));
 
     // Initialize Snapshot
-    auto snapshot_res = ffi::snapshot(path_slice, extern_engine);
-    snapshot = unpack_result_or_throw(snapshot_res, "snapshot in DeltaScanScanBind");
+    snapshot = TryUnpackKernelResult(ffi::snapshot(path_slice, extern_engine.get()));
 
+    // Create Scan
     PredicateVisitor visitor(names, &table_filters);
+    scan = TryUnpackKernelResult(ffi::scan(snapshot.get(), extern_engine.get(), &visitor));
 
-    auto scan_res = ffi::scan(snapshot, extern_engine, &visitor);
-    scan = unpack_result_or_throw(scan_res, "scan in DeltaScanScanBind");
-
-    global_state = ffi::get_global_scan_state(scan);
+    // Create GlobalState
+    global_state = ffi::get_global_scan_state(scan.get());
 
     // Set version
-    this->version = ffi::version(snapshot);
+    this->version = ffi::version(snapshot.get());
 
-    auto scan_iterator_res = ffi::kernel_scan_data_init(extern_engine, scan);
-    scan_data_iterator = {
-            unpack_result_or_throw(scan_iterator_res, "kernel_scan_data_init in InitFiles"),
-            ffi::kernel_scan_data_free
-    };
+    // Create scan data iterator
+    scan_data_iterator = TryUnpackKernelResult(ffi::kernel_scan_data_init(extern_engine.get(), scan.get()));
 
     initialized = true;
 }

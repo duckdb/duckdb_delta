@@ -25,11 +25,6 @@ create view ${table} as from ${table}_delta
 
 endloop
 
-# FIXME: for now this sporadically hits too many open files
-mode skip
-
-mode output_result
-
 loop i 1 9
 
 query I
