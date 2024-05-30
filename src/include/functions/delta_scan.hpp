@@ -57,16 +57,21 @@ protected:
     // TODO: How to guarantee we only call this after the filter pushdown?
     void InitializeFiles();
 
+    template <class T>
+    T TryUnpackKernelResult(ffi::ExternResult<T> result) {
+        return KernelUtils::UnpackResult<T>(result, StringUtil::Format("While trying to read from delta table: '%s'", paths[0]));
+    }
+
 // TODO: change back to protected
 public:
     idx_t version;
 
     //! Delta Kernel Structures
-    ffi::SharedSnapshot* snapshot;
-    ffi::SharedExternEngine* extern_engine;
-    ffi::SharedScan* scan;
-    ffi::SharedGlobalScanState* global_state;
-    UniqueKernelPointer <ffi::SharedScanDataIterator> scan_data_iterator;
+    KernelSnapshot snapshot;
+    KernelExternEngine extern_engine;
+    KernelScan scan;
+    KernelGlobalScanState global_state;
+    KernelScanDataIterator scan_data_iterator;
 
     //! Names
     vector<string> names;
@@ -113,7 +118,7 @@ struct DeltaMultiFileReader : public MultiFileReader {
                       const vector<string> &local_names, const vector<LogicalType> &global_types,
                       const vector<string> &global_names, const vector<column_t> &global_column_ids,
                       MultiFileReaderData &reader_data, const string &initial_file,
-                      optional_ptr<MultiFileReaderGlobalState> global_state);
+                      optional_ptr<MultiFileReaderGlobalState> global_state) override;
 
     unique_ptr<MultiFileReaderGlobalState> InitializeGlobalState(ClientContext &context, const MultiFileReaderOptions &file_options,
                           const MultiFileReaderBindData &bind_data, const MultiFileList &file_list,

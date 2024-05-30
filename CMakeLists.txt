@@ -20,6 +20,7 @@ set(EXTENSION_SOURCES
         src/inlined_parquet/parquet_extension.cpp
         src/delta_extension.cpp
         src/delta_functions.cpp
+        src/delta_utils.cpp
         src/functions/delta_scan.cpp)
 
 ### Custom config
