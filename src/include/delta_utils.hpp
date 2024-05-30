@@ -20,6 +20,8 @@ public:
         visitor.data = &state;
         visitor.make_field_list = (uintptr_t (*)(void*, uintptr_t)) &MakeFieldList;
         visitor.visit_struct = (void (*)(void*, uintptr_t, ffi::KernelStringSlice, uintptr_t)) &VisitStruct;
+        visitor.visit_array = (void (*)(void*, uintptr_t, ffi::KernelStringSlice, bool, uintptr_t)) &VisitArray;
+        visitor.visit_map = (void (*)(void*, uintptr_t, ffi::KernelStringSlice, bool, uintptr_t)) &VisitMap;
         visitor.visit_decimal = (void (*)(void*, uintptr_t, ffi::KernelStringSlice, uint8_t , uint8_t)) &VisitDecimal;
         visitor.visit_string = VisitSimpleType<LogicalType::VARCHAR>();
         visitor.visit_long = VisitSimpleType<LogicalType::BIGINT>();
@@ -29,10 +31,10 @@ public:
         visitor.visit_float = VisitSimpleType<LogicalType::FLOAT>();
         visitor.visit_double = VisitSimpleType<LogicalType::DOUBLE>();
         visitor.visit_boolean = VisitSimpleType<LogicalType::BOOLEAN>();
-        visitor.visit_binary = VisitSimpleType<LogicalType::VARCHAR>(); // TODO: check
-        visitor.visit_date = VisitSimpleType<LogicalType::DATE>(); // TODO: check
-        visitor.visit_timestamp = VisitSimpleType<LogicalType::TIMESTAMP>(); // TODO: check
-        visitor.visit_timestamp_ntz = VisitSimpleType<LogicalType::TIMESTAMP_TZ>(); // TODO: check
+        visitor.visit_binary = VisitSimpleType<LogicalType::VARCHAR>();
+        visitor.visit_date = VisitSimpleType<LogicalType::DATE>();
+        visitor.visit_timestamp = VisitSimpleType<LogicalType::TIMESTAMP>();
+        visitor.visit_timestamp_ntz = VisitSimpleType<LogicalType::TIMESTAMP_TZ>();
 
         uintptr_t result = visit_schema(snapshot, &visitor);
         return state.TakeFieldList(result);
@@ -66,6 +68,20 @@ private:
         state->AppendToList(sibling_list_id, name, LogicalType::STRUCT(std::move(*children)));
     }
 
+    static void VisitArray(SchemaVisitor* state, uintptr_t sibling_list_id, ffi::KernelStringSlice name, bool contains_null, uintptr_t child_list_id) {
+        auto children = state->TakeFieldList(child_list_id);
+
+        D_ASSERT(children->size() == 1);
+        state->AppendToList(sibling_list_id, name, LogicalType::LIST(children->front().second));
+    }
+
+    static void VisitMap(SchemaVisitor* state, uintptr_t sibling_list_id, ffi::KernelStringSlice name, bool contains_null, uintptr_t child_list_id) {
+        auto children = state->TakeFieldList(child_list_id);
+
+        D_ASSERT(children->size() == 2);
+        state->AppendToList(sibling_list_id, name, LogicalType::MAP(LogicalType::STRUCT(std::move(*children))));
+    }
+
     uintptr_t MakeFieldListImpl(uintptr_t capacity_hint) {
         uintptr_t id = next_id++;
         auto list = make_uniq<FieldList>();
@@ -80,6 +96,7 @@ private:
         auto it = inflight_lists.find(id);
         if (it == inflight_lists.end()) {
             // TODO... some error...
+            throw InternalException("WEIRD SHIT");
         } else {
             it->second->emplace_back(std::make_pair(string(name.ptr, name.len), std::move(child)));
         }
@@ -89,7 +106,7 @@ private:
         auto it = inflight_lists.find(id);
         if (it == inflight_lists.end()) {
             // TODO: Raise some kind of error.
-            return {}; // not present
+            throw InternalException("WEIRD SHIT 2");
         }
         auto rval = std::move(it->second);
         inflight_lists.erase(it);
