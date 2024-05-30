@@ -45,38 +45,10 @@ private:
 
 // Allocator for errors that the kernel might throw
 struct DuckDBEngineError : ffi::EngineError {
-    // Different Kernel errors
-    static constexpr char* KERNEL_ERROR_ENUM_STRINGS[] = {
-        "UnknownError",
-        "FFIError",
-        "ArrowError",
-        "EngineDataTypeError",
-        "ExtractError",
-        "GenericError",
-        "IOErrorError",
-        "ParquetError",
-        "ObjectStoreError",
-        "ObjectStorePathError",
-        "Reqwest",
-        "FileNotFoundError",
-        "MissingColumnError",
-        "UnexpectedColumnTypeError",
-        "MissingDataError",
-        "MissingVersionError",
-        "DeletionVectorError",
-        "InvalidUrlError",
-        "MalformedJsonError",
-        "MissingMetadataError",
-        "MissingProtocolError",
-        "MissingMetadataAndProtocolError",
-        "ParseError",
-        "JoinFailureError",
-        "Utf8Error",
-        "ParseIntError"
-    };
-
     // Allocate a DuckDBEngineError, function ptr passed to kernel for error allocation
     static ffi::EngineError* AllocateError(ffi::KernelError etype, ffi::KernelStringSlice msg);
+    // Convert a kernel error enum to a string
+    static string KernelErrorEnumToString(ffi::KernelError err);
 
     // Throw the error as an IOException
     [[noreturn]] void Throw(string from_info);
@@ -84,11 +56,6 @@ struct DuckDBEngineError : ffi::EngineError {
     // The error message from Kernel
     string error_message;
 };
-
-static_assert(sizeof(DuckDBEngineError::KERNEL_ERROR_ENUM_STRINGS)/sizeof(char*)-1 == (int)ffi::KernelError::ParseIntError,
-      "KernelErrorEnumStrings failin");
-
-
 
 // RAII wrapper that returns ownership of a kernel pointer to kernel when it goes out of
 // scope. Similar to std::unique_ptr. but does not define operator->() and does not require the

@@ -99,6 +99,49 @@ ffi::EngineError* DuckDBEngineError::AllocateError(ffi::KernelError etype, ffi::
     return error;
 }
 
+string DuckDBEngineError::KernelErrorEnumToString(ffi::KernelError err) {
+    const char* KERNEL_ERROR_ENUM_STRINGS[] = {
+        "UnknownError",
+        "FFIError",
+        "ArrowError",
+        "EngineDataTypeError",
+        "ExtractError",
+        "GenericError",
+        "IOErrorError",
+        "ParquetError",
+        "ObjectStoreError",
+        "ObjectStorePathError",
+        "Reqwest",
+        "FileNotFoundError",
+        "MissingColumnError",
+        "UnexpectedColumnTypeError",
+        "MissingDataError",
+        "MissingVersionError",
+        "DeletionVectorError",
+        "InvalidUrlError",
+        "MalformedJsonError",
+        "MissingMetadataError",
+        "MissingProtocolError",
+        "MissingMetadataAndProtocolError",
+        "ParseError",
+        "JoinFailureError",
+        "Utf8Error",
+        "ParseIntError",
+        "InvalidColumnMappingMode",
+        "InvalidTableLocation",
+        "InvalidDecimalError",
+    };
+
+    static_assert(sizeof(KERNEL_ERROR_ENUM_STRINGS)/sizeof(char*)-1 == (int)ffi::KernelError::InvalidDecimalError,
+        "KernelErrorEnumStrings mismatched with kernel");
+
+    if ((int)err < sizeof(KERNEL_ERROR_ENUM_STRINGS)/sizeof(char*)) {
+        return KERNEL_ERROR_ENUM_STRINGS[(int)err];
+    }
+
+    return StringUtil::Format("EnumOutOfRange (enum val out of range: %d)", (int)err);
+}
+
 void DuckDBEngineError::Throw(string from_where) {
     // Make copies before calling delete this
     auto etype_copy = etype;
@@ -107,7 +150,7 @@ void DuckDBEngineError::Throw(string from_where) {
     // Consume error by calling delete this (remember this error is created by kernel using AllocateError)
     delete this;
     throw IOException("Hit DeltaKernel FFI error (from: %s): Hit error: %u (%s) with message (%s)",
-                            from_where.c_str(), etype_copy, KERNEL_ERROR_ENUM_STRINGS[(int)etype_copy], message_copy);
+                            from_where.c_str(), etype_copy, KernelErrorEnumToString(etype_copy), message_copy);
 }
 
 
