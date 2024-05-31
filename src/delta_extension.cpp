@@ -7,8 +7,6 @@
 #include "duckdb/common/exception.hpp"
 #include "duckdb/main/extension_util.hpp"
 
-#include "parquet_reader.hpp"
-
 namespace duckdb {
 
 static void LoadInternal(DatabaseInstance &instance) {
