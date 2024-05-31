@@ -100,6 +100,7 @@ static ffi::EngineBuilder* CreateBuilder(ClientContext &context, const string &p
 
     auto key_id = kv_secret.TryGetValue("key_id").ToString();
     auto secret = kv_secret.TryGetValue("secret").ToString();
+    auto session_token = kv_secret.TryGetValue("session_token").ToString();
     auto region = kv_secret.TryGetValue("region").ToString();
 
     if (key_id.empty() && secret.empty()) {
@@ -111,6 +112,9 @@ static ffi::EngineBuilder* CreateBuilder(ClientContext &context, const string &p
     }
     if (!secret.empty()) {
         ffi::set_builder_option(builder, KernelUtils::ToDeltaString("aws_secret_access_key"), KernelUtils::ToDeltaString(secret));
+    }
+    if (!session_token.empty()) {
+        ffi::set_builder_option(builder, KernelUtils::ToDeltaString("aws_session_token"), KernelUtils::ToDeltaString(session_token));
     }
     ffi::set_builder_option(builder, KernelUtils::ToDeltaString("aws_region"), KernelUtils::ToDeltaString(region));
 
