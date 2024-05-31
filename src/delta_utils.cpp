@@ -218,20 +218,8 @@ static bool CanHandleFilter(TableFilter *filter) {
     }
 }
 
-// Prunes the list of predicates to ones that we can handle
-static unordered_map<string, TableFilter*> PrunePredicates(unordered_map<string, TableFilter*> predicates) {
-    unordered_map<string, TableFilter*> result;
-    for (const auto &predicate : predicates) {
-        if (CanHandleFilter(predicate.second)) {
-            result[predicate.first] = predicate.second;
-        }
-
-    }
-    return result;
-}
-
 uintptr_t PredicateVisitor::VisitPredicate(PredicateVisitor* predicate, ffi::KernelExpressionVisitorState* state) {
-    auto filters = predicate->column_filters;
+    auto &filters = predicate->column_filters;
 
     auto it = filters.begin();
     auto end = filters.end();
@@ -244,12 +232,7 @@ uintptr_t PredicateVisitor::VisitPredicate(PredicateVisitor* predicate, ffi::Ker
     };
     auto eit = EngineIteratorFromCallable(get_next);
 
-    // TODO: this should be fixed upstream?
-    try {
-        return visit_expression_and(state, &eit);
-    } catch (...) {
-        return ~0;
-    }
+    return visit_expression_and(state, &eit);
 }
 
 uintptr_t PredicateVisitor::VisitConstantFilter(const string &col_name, const ConstantFilter &filter, ffi::KernelExpressionVisitorState* state) {

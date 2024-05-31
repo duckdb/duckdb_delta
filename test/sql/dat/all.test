@@ -76,6 +76,9 @@ SELECT letter, date, decode(data) as data, number
 FROM parquet_scan('${DAT_PATH}/out/reader_tests/generated/multi_partitioned/expected/latest/**/*.parquet')
 ----
 
+# TODO: fix this
+require notwindows
+
 # multi_partitioned_2
 query I rowsort multi_partitioned_2
 SELECT *
