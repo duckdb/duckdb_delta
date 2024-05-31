@@ -180,14 +180,12 @@ string DeltaSnapshot::GetFile(idx_t i) {
     }
 
     while(i >= resolved_files.size()) {
-        auto size_before = resolved_files.size();
-
         auto have_scan_data_res = ffi::kernel_scan_data_next(scan_data_iterator.get(), this, visit_data);
 
         auto have_scan_data = TryUnpackKernelResult(have_scan_data_res);
 
-        // TODO: shouldn't the kernel always return false here?
-        if (!have_scan_data || resolved_files.size() == size_before) {
+        // kernel has indicated that we have no more data to scan
+        if (!have_scan_data) {
             files_exhausted = true;
             return "";
         }
