@@ -1,0 +1,149 @@
+# name: test/sql/dat/basic_partitioned.test
+# description: DAT test suite: primitive types 
+# group: [delta]
+
+require parquet
+
+require delta
+
+require-env DAT_PATH
+
+### PASSING DAT TESTS
+
+# all_primitive_types
+query I rowsort all_primitive_types
+SELECT *
+FROM delta_scan('${DAT_PATH}/out/reader_tests/generated/all_primitive_types/delta')
+----
+
+query I rowsort all_primitive_types
+SELECT *
+FROM parquet_scan('${DAT_PATH}/out/reader_tests/generated/all_primitive_types/expected/latest/**/*.parquet')
+----
+
+# nested_types
+query I rowsort nested_types
+SELECT *
+FROM delta_scan('${DAT_PATH}/out/reader_tests/generated/nested_types/delta')
+----
+
+query I rowsort nested_types
+SELECT *
+FROM parquet_scan('${DAT_PATH}/out/reader_tests/generated/nested_types/expected/latest/**/*.parquet')
+----
+
+# basic_append
+query I rowsort basic_append
+SELECT *
+FROM delta_scan('${DAT_PATH}/out/reader_tests/generated/basic_append/delta')
+----
+
+query I rowsort basic_append
+SELECT *
+FROM parquet_scan('${DAT_PATH}/out/reader_tests/generated/basic_append/expected/latest/**/*.parquet')
+----
+
+# with_schema_change
+query I rowsort with_checkpoint
+SELECT *
+FROM delta_scan('${DAT_PATH}/out/reader_tests/generated/with_schema_change/delta')
+----
+
+query I rowsort with_checkpoint
+SELECT *
+FROM parquet_scan('${DAT_PATH}/out/reader_tests/generated/with_schema_change/expected/latest/**/*.parquet')
+----
+
+
+### FAILING DAT TESTS
+
+# TODO fix all of these
+mode skip
+
+# basic_partitioned
+query I rowsort basic_partitioned
+SELECT *
+FROM delta_scan('${DAT_PATH}/out/reader_tests/generated/basic_partitioned/delta')
+----
+
+query I rowsort basic_partitioned
+SELECT *
+FROM parquet_scan('${DAT_PATH}/out/reader_tests/generated/basic_partitioned/expected/latest/**/*.parquet')
+----
+
+# multi_partitioned
+query I rowsort multi_partitioned
+SELECT *
+FROM delta_scan('${DAT_PATH}/out/reader_tests/generated/multi_partitioned/delta')
+----
+
+query I rowsort multi_partitioned
+SELECT *
+FROM parquet_scan('${DAT_PATH}/out/reader_tests/generated/multi_partitioned/expected/latest/**/*.parquet')
+----
+
+# multi_partitioned
+query I rowsort multi_partitioned
+SELECT *
+FROM delta_scan('${DAT_PATH}/out/reader_tests/generated/multi_partitioned/delta')
+----
+
+query I rowsort multi_partitioned
+SELECT *
+FROM parquet_scan('${DAT_PATH}/out/reader_tests/generated/multi_partitioned/expected/latest/**/*.parquet')
+----
+
+# multi_partitioned_2
+query I rowsort multi_partitioned_2
+SELECT *
+FROM delta_scan('${DAT_PATH}/out/reader_tests/generated/multi_partitioned_2/delta')
+----
+
+query I rowsort multi_partitioned_2
+SELECT *
+FROM parquet_scan('${DAT_PATH}/out/reader_tests/generated/multi_partitioned_2/expected/latest/**/*.parquet')
+----
+
+# no_replay
+query I rowsort no_replay
+SELECT *
+FROM delta_scan('${DAT_PATH}/out/reader_tests/generated/no_replay/delta')
+----
+
+query I rowsort no_replay
+SELECT *
+FROM parquet_scan('${DAT_PATH}/out/reader_tests/generated/no_replay/expected/latest/**/*.parquet')
+----
+
+# no_stats
+query I rowsort no_stats
+SELECT *
+FROM delta_scan('${DAT_PATH}/out/reader_tests/generated/no_stats/delta')
+----
+
+query I rowsort no_stats
+SELECT *
+FROM parquet_scan('${DAT_PATH}/out/reader_tests/generated/no_stats/expected/latest/**/*.parquet')
+----
+
+# stats_as_struct
+query I rowsort stats_as_struct
+SELECT *
+FROM delta_scan('${DAT_PATH}/out/reader_tests/generated/stats_as_struct/delta')
+----
+
+query I rowsort stats_as_struct
+SELECT *
+FROM parquet_scan('${DAT_PATH}/out/reader_tests/generated/stats_as_struct/expected/latest/**/*.parquet')
+----
+
+# with_checkpoint
+query I rowsort with_checkpoint
+SELECT *
+FROM delta_scan('${DAT_PATH}/out/reader_tests/generated/with_checkpoint/delta')
+----
+
+query I rowsort with_checkpoint
+SELECT *
+FROM parquet_scan('${DAT_PATH}/out/reader_tests/generated/with_checkpoint/expected/latest/**/*.parquet')
+----
