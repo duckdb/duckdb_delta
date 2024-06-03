@@ -1,6 +1,5 @@
 #include "duckdb/function/table_function.hpp"
 
-#include "parquet_override.hpp"
 #include "delta_functions.hpp"
 #include "functions/delta_scan.hpp"
 #include "duckdb/optimizer/filter_combiner.hpp"
@@ -575,10 +574,8 @@ TableFunctionSet DeltaFunctions::GetDeltaScanFunction(DatabaseInstance &instance
     // The delta_scan function is constructed by grabbing the parquet scan from the Catalog, then injecting the
     // DeltaMultiFileReader into it to create a Delta-based multi file read
 
-    // FIXME revert when all required changes are applied upstream
-//    auto &parquet_scan = ExtensionUtil::GetTableFunction(instance, "parquet_scan");
-//    auto parquet_scan_copy = parquet_scan.functions;
-    auto parquet_scan_copy = ParquetOverrideFunction::GetFunctionSet();
+    auto &parquet_scan = ExtensionUtil::GetTableFunction(instance, "parquet_scan");
+    auto parquet_scan_copy = parquet_scan.functions;
 
     for (auto &function : parquet_scan_copy.functions) {
         // Register the MultiFileReader as the driver for reads

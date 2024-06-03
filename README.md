@@ -12,7 +12,7 @@ Support for the [other](https://duckdb.org/docs/extensions/working_with_extensio
 work-in-progress
 
 # How to use
-**NOTE: this extension requires the latest stable version of DuckDB, v0.10.3.**
+**NOTE: this extension requires the DuckDB v0.10.3 or higher**
 
 This extension is distributed as a binary extension. To use it, simply use one of its functions from DuckDB and the extension will be autoloaded:
 ```SQL

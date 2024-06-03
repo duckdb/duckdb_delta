@@ -11,13 +11,7 @@ project(${TARGET_NAME})
 
 include_directories(src/include)
 
-# Need a few extra headers from duckdb for parquet reading
-include_directories(duckdb/extension/parquet/include)
-include_directories(duckdb/third_party/parquet)
-include_directories(duckdb/third_party/thrift)
-
 set(EXTENSION_SOURCES
-        src/inlined_parquet/parquet_extension.cpp
         src/delta_extension.cpp
         src/delta_functions.cpp
         src/delta_utils.cpp
