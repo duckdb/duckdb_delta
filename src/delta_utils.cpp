@@ -226,7 +226,7 @@ static unordered_map<string, TableFilter*> PrunePredicates(unordered_map<string,
 }
 
 uintptr_t PredicateVisitor::VisitPredicate(PredicateVisitor* predicate, ffi::KernelExpressionVisitorState* state) {
-    auto filters = PrunePredicates(predicate->column_filters);
+    auto filters = predicate->column_filters;
 
     auto it = filters.begin();
     auto end = filters.end();
@@ -312,7 +312,7 @@ uintptr_t PredicateVisitor::VisitFilter(const string &col_name, const TableFilte
         case TableFilterType::CONJUNCTION_AND:
             return VisitAndFilter(col_name, static_cast<const ConjunctionAndFilter&>(filter), state);
         default:
-            throw NotImplementedException("Attempted to push down unimplemented filter type: '%s'", EnumUtil::ToString(filter.filter_type));
+            return ~0;
     }
 }
 
