@@ -69,7 +69,7 @@ static ffi::EngineBuilder* CreateBuilder(ClientContext &context, const string &p
     ffi::EngineBuilder* builder;
 
     // For "regular" paths we early out with the default builder config
-    if (!StringUtil::StartsWith(path, "s3://") && !StringUtil::StartsWith(path, "azure://")) {
+    if (!StringUtil::StartsWith(path, "s3://") && !StringUtil::StartsWith(path, "azure://") && !StringUtil::StartsWith(path, "az://") && !StringUtil::StartsWith(path, "abfss://")) {
         auto interface_builder_res = ffi::get_engine_builder(KernelUtils::ToDeltaString(path), DuckDBEngineError::AllocateError);
         return KernelUtils::UnpackResult(interface_builder_res, "get_engine_interface_builder for path " + path);
     }
@@ -88,6 +88,24 @@ static ffi::EngineBuilder* CreateBuilder(ClientContext &context, const string &p
         path_in_bucket = path.substr(end_of_container);
         secret_type = "s3";
     } else if (StringUtil::StartsWith(path, "azure://")) {
+        auto end_of_container = path.find('/',8);
+
+        if(end_of_container == string::npos) {
+            throw IOException("Invalid azure url passed to delta scan: %s", path);
+        }
+        bucket = path.substr(8, end_of_container-8);
+        path_in_bucket = path.substr(end_of_container);
+        secret_type = "azure";
+    } else if (StringUtil::StartsWith(path, "az://")) {
+        auto end_of_container = path.find('/',5);
+
+        if(end_of_container == string::npos) {
+            throw IOException("Invalid azure url passed to delta scan: %s", path);
+        }
+        bucket = path.substr(5, end_of_container-5);
+        path_in_bucket = path.substr(end_of_container);
+        secret_type = "azure";
+    } else if (StringUtil::StartsWith(path, "abfss://")) {
         auto end_of_container = path.find('/',8);
 
         if(end_of_container == string::npos) {
