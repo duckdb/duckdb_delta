@@ -136,6 +136,12 @@ con.query(f"call dbgen(sf=0.01); EXPORT DATABASE '{TMP_PATH}/tpch_sf0_01_export'
 for table in ["customer","lineitem","nation","orders","part","partsupp","region","supplier"]:
     generate_test_data_pyspark(f"tpch_sf0_01_{table}", f'tpch_sf0_01/{table}', f'{TMP_PATH}/tpch_sf0_01_export/{table}.parquet')
 
+## TPCH SF1 full dataset
+con = duckdb.connect()
+con.query(f"call dbgen(sf=1); EXPORT DATABASE '{TMP_PATH}/tpch_sf1_export' (FORMAT parquet)")
+for table in ["customer","lineitem","nation","orders","part","partsupp","region","supplier"]:
+    generate_test_data_pyspark(f"tpch_sf1_{table}", f'tpch_sf1/{table}', f'{TMP_PATH}/tpch_sf1_export/{table}.parquet')
+
 ## TPCDS SF0.01 full dataset
 con = duckdb.connect()
 con.query(f"call dsdgen(sf=0.01); EXPORT DATABASE '{TMP_PATH}/tpcds_sf0_01_export' (FORMAT parquet)")

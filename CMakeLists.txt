@@ -60,7 +60,7 @@ endif()
 ExternalProject_Add(
         ${KERNEL_NAME}
         GIT_REPOSITORY "https://github.com/delta-incubator/delta-kernel-rs"
-        GIT_TAG 823367e4dc13b627914412ee2ca7933a1c7b822a
+        GIT_TAG c901665b98b2fed5ff1c713a9666eba9d16ea281
         CONFIGURE_COMMAND ""
         UPDATE_COMMAND ""
         BUILD_IN_SOURCE 1

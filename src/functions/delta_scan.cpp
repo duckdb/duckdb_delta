@@ -31,6 +31,8 @@ static void visit_callback(ffi::NullableCvoid engine_context, struct ffi::Kernel
     StringUtil::RTrim(path_string, "/");
     path_string += "/" + KernelUtils::FromDeltaString(path);
 
+    printf("Got File %s\n", path_string.c_str());
+
     // First we append the file to our resolved files
     context->resolved_files.push_back(DeltaSnapshot::ToDuckDBPath(path_string));
     context->metadata.emplace_back(make_uniq<DeltaFileMetaData>());

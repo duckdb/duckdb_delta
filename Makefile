@@ -14,11 +14,6 @@ test_debug: export DAT_PATH=./build/debug/rust/src/delta_kernel/acceptance/tests
 # Include the Makefile from extension-ci-tools
 include extension-ci-tools/makefiles/duckdb_extension.Makefile
 
-reldebug:
-	mkdir -p build/reldebug && \
-	cmake $(GENERATOR) $(BUILD_FLAGS) $(EXT_RELEASE_FLAGS) -DCMAKE_BUILD_TYPE=RelWithDebInfo -S ./duckdb/ -B build/reldebug && \
-	cmake --build build/reldebug --config RelWithDebInfo
-
 # Generate some test data to test with
 generate-data:
 	python3 -m pip install delta-spark duckdb pandas deltalake pyspark delta
