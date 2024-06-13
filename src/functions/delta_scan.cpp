@@ -69,27 +69,43 @@ static ffi::EngineBuilder* CreateBuilder(ClientContext &context, const string &p
     ffi::EngineBuilder* builder;
 
     // For "regular" paths we early out with the default builder config
-    if (!StringUtil::StartsWith(path, "s3://")) {
+    if (!StringUtil::StartsWith(path, "s3://") && !StringUtil::StartsWith(path, "azure://")) {
         auto interface_builder_res = ffi::get_engine_builder(KernelUtils::ToDeltaString(path), DuckDBEngineError::AllocateError);
         return KernelUtils::UnpackResult(interface_builder_res, "get_engine_interface_builder for path " + path);
     }
 
-    auto end_of_container = path.find('/',5);
+    string bucket;
+    string path_in_bucket;
+    string secret_type;
 
-    if(end_of_container == string::npos) {
-        throw IOException("Invalid s3 url passed to delta scan: %s", path);
+    if (StringUtil::StartsWith(path, "s3://")) {
+        auto end_of_container = path.find('/',5);
+
+        if(end_of_container == string::npos) {
+            throw IOException("Invalid s3 url passed to delta scan: %s", path);
+        }
+        bucket = path.substr(5, end_of_container-5);
+        path_in_bucket = path.substr(end_of_container);
+        secret_type = "s3";
+    } else if (StringUtil::StartsWith(path, "azure://")) {
+        auto end_of_container = path.find('/',8);
+
+        if(end_of_container == string::npos) {
+            throw IOException("Invalid azure url passed to delta scan: %s", path);
+        }
+        bucket = path.substr(8, end_of_container-8);
+        path_in_bucket = path.substr(end_of_container);
+        secret_type = "azure";
     }
-    auto bucket = path.substr(5, end_of_container-5);
-    auto path_in_bucket = path.substr(end_of_container);
 
     auto interface_builder_res = ffi::get_engine_builder(KernelUtils::ToDeltaString(path), DuckDBEngineError::AllocateError);
     builder = KernelUtils::UnpackResult(interface_builder_res, "get_engine_interface_builder for path " + path);
 
-    // For S3 paths we need to trim the url, set the container, and fetch a potential secret
+    // For S3 or Azure paths we need to trim the url, set the container, and fetch a potential secret
     auto &secret_manager = SecretManager::Get(context);
     auto transaction = CatalogTransaction::GetSystemCatalogTransaction(context);
 
-    auto secret_match = secret_manager.LookupSecret(transaction, path, "s3");
+    auto secret_match = secret_manager.LookupSecret(transaction, path, secret_type);
 
     // No secret: nothing left to do here!
     if (!secret_match.HasMatch()) {
@@ -97,26 +113,79 @@ static ffi::EngineBuilder* CreateBuilder(ClientContext &context, const string &p
     }
     const auto &kv_secret = dynamic_cast<const KeyValueSecret &>(*secret_match.secret_entry->secret);
 
-    auto key_id = kv_secret.TryGetValue("key_id").ToString();
-    auto secret = kv_secret.TryGetValue("secret").ToString();
-    auto session_token = kv_secret.TryGetValue("session_token").ToString();
-    auto region = kv_secret.TryGetValue("region").ToString();
 
-    if (key_id.empty() && secret.empty()) {
-        ffi::set_builder_option(builder, KernelUtils::ToDeltaString("skip_signature"), KernelUtils::ToDeltaString("true"));
-    }
+    // Here you would need to add the logic for setting the builder options for Azure
+    // This is just a placeholder and will need to be replaced with the actual logic
+    if (secret_type == "s3") {
+        auto key_id = kv_secret.TryGetValue("key_id").ToString();
+        auto secret = kv_secret.TryGetValue("secret").ToString();
+        auto session_token = kv_secret.TryGetValue("session_token").ToString();
+        auto region = kv_secret.TryGetValue("region").ToString();
 
-    if (!key_id.empty()) {
-        ffi::set_builder_option(builder, KernelUtils::ToDeltaString("aws_access_key_id"), KernelUtils::ToDeltaString(key_id));
-    }
-    if (!secret.empty()) {
-        ffi::set_builder_option(builder, KernelUtils::ToDeltaString("aws_secret_access_key"), KernelUtils::ToDeltaString(secret));
-    }
-    if (!session_token.empty()) {
-        ffi::set_builder_option(builder, KernelUtils::ToDeltaString("aws_session_token"), KernelUtils::ToDeltaString(session_token));
-    }
-    ffi::set_builder_option(builder, KernelUtils::ToDeltaString("aws_region"), KernelUtils::ToDeltaString(region));
+        if (key_id.empty() && secret.empty()) {
+            ffi::set_builder_option(builder, KernelUtils::ToDeltaString("skip_signature"), KernelUtils::ToDeltaString("true"));
+        }
 
+        if (!key_id.empty()) {
+            ffi::set_builder_option(builder, KernelUtils::ToDeltaString("aws_access_key_id"), KernelUtils::ToDeltaString(key_id));
+        }
+        if (!secret.empty()) {
+            ffi::set_builder_option(builder, KernelUtils::ToDeltaString("aws_secret_access_key"), KernelUtils::ToDeltaString(secret));
+        }
+        if (!session_token.empty()) {
+            ffi::set_builder_option(builder, KernelUtils::ToDeltaString("aws_session_token"), KernelUtils::ToDeltaString(session_token));
+        }
+        ffi::set_builder_option(builder, KernelUtils::ToDeltaString("aws_region"), KernelUtils::ToDeltaString(region));
+
+    } else if (secret_type == "azure") {
+        
+        auto connection_string = kv_secret.TryGetValue("connection_string").ToString();
+        auto account_name = kv_secret.TryGetValue("account_name").ToString();
+        auto account_key = kv_secret.TryGetValue("account_key").ToString();
+        auto client_id = kv_secret.TryGetValue("client_id").ToString();
+        auto client_secret = kv_secret.TryGetValue("client_secret").ToString();
+        auto tenant_id = kv_secret.TryGetValue("tenant_id").ToString();
+        auto azure_client_certificate_path = kv_secret.TryGetValue("certificate_path").ToString();
+        auto sas_token = kv_secret.TryGetValue("sas_token").ToString();
+        auto http_proxy = kv_secret.TryGetValue("http_proxy").ToString();
+        auto proxy_user_name = kv_secret.TryGetValue("proxy_user_name").ToString();
+        auto proxy_password = kv_secret.TryGetValue("proxy_password").ToString();
+
+        if (!connection_string.empty()) {
+            ffi::set_builder_option(builder, KernelUtils::ToDeltaString("azure_storage_connection_string"), KernelUtils::ToDeltaString(connection_string));
+        }
+        if (!account_name.empty()) {
+            ffi::set_builder_option(builder, KernelUtils::ToDeltaString("azure_storage_account_name"), KernelUtils::ToDeltaString(account_name));
+        }
+        if (!account_key.empty()) {
+            ffi::set_builder_option(builder, KernelUtils::ToDeltaString("azure_storage_account_key"), KernelUtils::ToDeltaString(account_key));
+        }
+        if (!client_id.empty()) {
+            ffi::set_builder_option(builder, KernelUtils::ToDeltaString("azure_client_id"), KernelUtils::ToDeltaString(client_id));
+        }
+        if (!client_secret.empty()) {
+            ffi::set_builder_option(builder, KernelUtils::ToDeltaString("azure_client_secret"), KernelUtils::ToDeltaString(client_secret));
+        }
+        if (!tenant_id.empty()) {
+            ffi::set_builder_option(builder, KernelUtils::ToDeltaString("azure_tenant_id"), KernelUtils::ToDeltaString(tenant_id));
+        }
+        if (!azure_client_certificate_path.empty()) {
+            ffi::set_builder_option(builder, KernelUtils::ToDeltaString("azure_client_certificate_path"), KernelUtils::ToDeltaString(azure_client_certificate_path));
+        }
+        if (!sas_token.empty()) {
+            ffi::set_builder_option(builder, KernelUtils::ToDeltaString("azure_sas_token"), KernelUtils::ToDeltaString(sas_token));
+        }
+        if (!http_proxy.empty()) {
+            ffi::set_builder_option(builder, KernelUtils::ToDeltaString("http_proxy"), KernelUtils::ToDeltaString(http_proxy));
+        }
+        if (!proxy_user_name.empty()) {
+            ffi::set_builder_option(builder, KernelUtils::ToDeltaString("proxy_user_name"), KernelUtils::ToDeltaString(proxy_user_name));
+        }
+        if (!proxy_password.empty()) {
+            ffi::set_builder_option(builder, KernelUtils::ToDeltaString("proxy_password"), KernelUtils::ToDeltaString(proxy_password));
+        }
+
+    }
     return builder;
 }
 
