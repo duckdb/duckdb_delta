@@ -159,12 +159,12 @@ static ffi::EngineBuilder* CreateBuilder(ClientContext &context, const string &p
         
         auto connection_string = kv_secret.TryGetValue("connection_string").ToString();
         auto account_name = kv_secret.TryGetValue("account_name").ToString();
-        auto account_key = kv_secret.TryGetValue("account_key").ToString();
+        auto endpoint = kv_secret.TryGetValue("endpoint").ToString();
+        auto credential_chain = kv_secret.TryGetValue("credential_chain").ToString();
         auto client_id = kv_secret.TryGetValue("client_id").ToString();
         auto client_secret = kv_secret.TryGetValue("client_secret").ToString();
         auto tenant_id = kv_secret.TryGetValue("tenant_id").ToString();
-        auto azure_client_certificate_path = kv_secret.TryGetValue("certificate_path").ToString();
-        auto sas_token = kv_secret.TryGetValue("sas_token").ToString();
+        auto certificate_path = kv_secret.TryGetValue("certificate_path").ToString();
         auto http_proxy = kv_secret.TryGetValue("http_proxy").ToString();
         auto proxy_user_name = kv_secret.TryGetValue("proxy_user_name").ToString();
         auto proxy_password = kv_secret.TryGetValue("proxy_password").ToString();
@@ -175,8 +175,11 @@ static ffi::EngineBuilder* CreateBuilder(ClientContext &context, const string &p
         if (!account_name.empty()) {
             ffi::set_builder_option(builder, KernelUtils::ToDeltaString("azure_storage_account_name"), KernelUtils::ToDeltaString(account_name));
         }
-        if (!account_key.empty()) {
-            ffi::set_builder_option(builder, KernelUtils::ToDeltaString("azure_storage_account_key"), KernelUtils::ToDeltaString(account_key));
+        if (!endpoint.empty()) {
+            ffi::set_builder_option(builder, KernelUtils::ToDeltaString("azure_endpoint"), KernelUtils::ToDeltaString(endpoint));
+        }
+        if (!credential_chain.empty()) {
+            ffi::set_builder_option(builder, KernelUtils::ToDeltaString("azure_credential_chain"), KernelUtils::ToDeltaString(credential_chain));
         }
         if (!client_id.empty()) {
             ffi::set_builder_option(builder, KernelUtils::ToDeltaString("azure_client_id"), KernelUtils::ToDeltaString(client_id));
@@ -187,11 +190,8 @@ static ffi::EngineBuilder* CreateBuilder(ClientContext &context, const string &p
         if (!tenant_id.empty()) {
             ffi::set_builder_option(builder, KernelUtils::ToDeltaString("azure_tenant_id"), KernelUtils::ToDeltaString(tenant_id));
         }
-        if (!azure_client_certificate_path.empty()) {
-            ffi::set_builder_option(builder, KernelUtils::ToDeltaString("azure_client_certificate_path"), KernelUtils::ToDeltaString(azure_client_certificate_path));
-        }
-        if (!sas_token.empty()) {
-            ffi::set_builder_option(builder, KernelUtils::ToDeltaString("azure_sas_token"), KernelUtils::ToDeltaString(sas_token));
+        if (!certificate_path.empty()) {
+            ffi::set_builder_option(builder, KernelUtils::ToDeltaString("azure_client_certificate_path"), KernelUtils::ToDeltaString(certificate_path));
         }
         if (!http_proxy.empty()) {
             ffi::set_builder_option(builder, KernelUtils::ToDeltaString("http_proxy"), KernelUtils::ToDeltaString(http_proxy));
