@@ -116,6 +116,11 @@ generate_test_data_delta_rs("lineitem_sf1_10part", query, "part")
 query = "CREATE table test_table AS SELECT {'i':i, 'j':i+1} as value, i%2 as part from range(0,10) tbl(i);"
 generate_test_data_delta_rs("simple_partitioned_with_structs", query, "part");
 
+## Partitioned table with all types we can file skip on
+for type in ["bool", "int", "tinyint", "smallint", "bigint", "float", "double", "varchar"]:
+    query = f"CREATE table test_table as select i::{type} as value, i::{type} as part from range(0,2) tbl(i)"
+    generate_test_data_delta_rs(f"test_file_skipping/{type}", query, "part");
+
 ## Simple table with deletion vector
 con = duckdb.connect()
 con.query(f"COPY (SELECT i as id, ('val' || i::VARCHAR) as value  FROM range(0,1000000) tbl(i))TO '{TMP_PATH}/simple_sf1_with_dv.parquet'")
