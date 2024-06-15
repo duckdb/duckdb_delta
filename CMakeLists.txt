@@ -59,8 +59,8 @@ endif()
 # Add rust_example as a CMake target
 ExternalProject_Add(
         ${KERNEL_NAME}
-        GIT_REPOSITORY "https://github.com/delta-incubator/delta-kernel-rs"
-        GIT_TAG c901665b98b2fed5ff1c713a9666eba9d16ea281
+        GIT_REPOSITORY "https://github.com/nicklan/delta-kernel-rs"
+        GIT_TAG 181232a45562ca78be763c2f5fb46b88a2463b5c
         CONFIGURE_COMMAND ""
         UPDATE_COMMAND ""
         BUILD_IN_SOURCE 1

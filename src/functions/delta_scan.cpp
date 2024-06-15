@@ -31,8 +31,6 @@ static void visit_callback(ffi::NullableCvoid engine_context, struct ffi::Kernel
     StringUtil::RTrim(path_string, "/");
     path_string += "/" + KernelUtils::FromDeltaString(path);
 
-    printf("Got File %s\n", path_string.c_str());
-
     // First we append the file to our resolved files
     context->resolved_files.push_back(DeltaSnapshot::ToDuckDBPath(path_string));
     context->metadata.emplace_back(make_uniq<DeltaFileMetaData>());
@@ -589,7 +587,6 @@ TableFunctionSet DeltaFunctions::GetDeltaScanFunction(DatabaseInstance &instance
         function.deserialize = nullptr;
         function.statistics = nullptr;
         function.table_scan_progress = nullptr;
-        function.cardinality = nullptr;
         function.get_bind_info = nullptr;
 
         // Schema param is just confusing here

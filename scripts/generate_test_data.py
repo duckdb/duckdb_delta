@@ -78,7 +78,8 @@ def generate_test_data_pyspark(name, current_path, input_path, delete_predicate 
 
     ## CREATE
     ## CONFIGURE USAGE OF DELETION VECTORS
-    spark.sql(f"ALTER TABLE test_table_{name} SET TBLPROPERTIES ('delta.enableDeletionVectors' = true);")
+    if (delete_predicate):
+        spark.sql(f"ALTER TABLE test_table_{name} SET TBLPROPERTIES ('delta.enableDeletionVectors' = true);")
 
     ## ADDING DELETES
     deltaTable = DeltaTable.forPath(spark, delta_table_path)
