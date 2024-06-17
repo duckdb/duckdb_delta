@@ -1,0 +1,44 @@
+# name: test/sql/generated/file_skipping_all_types.test
+# description: Test filter pushdown succeeds on all file types we can push down
+# group: [delta_generated]
+
+require parquet
+
+require delta
+
+require-env GENERATED_DATA_AVAILABLE
+
+# TODO: this doesn't appear to skip files yet
+# TODO: add tests once https://github.com/duckdb/duckdb/pull/12488 is available
+
+query I
+select value
+from delta_scan('./data/generated/test_file_skipping/bool/delta_lake')
+where part != false
+order by value
+----
+true
+
+foreach type bool int tinyint smallint bigint varchar
+
+query I
+select value
+from delta_scan('./data/generated/test_file_skipping/${type}/delta_lake')
+where part != 0
+order by value
+----
+1
+
+endloop
+
+foreach type float double
+
+query I
+select value
+from delta_scan('./data/generated/test_file_skipping/${type}/delta_lake')
+where part > 0.5
+order by value
+----
+1.0
+
+endloop
