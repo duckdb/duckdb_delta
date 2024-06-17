@@ -35,10 +35,18 @@ set(KERNEL_NAME delta_kernel)
 # Set default ExternalProject root directory
 set_directory_properties(PROPERTIES EP_PREFIX ${CMAKE_BINARY_DIR}/rust)
 
+set(RUST_ENV_VARS "")
+
 # Propagate arch to rust build for CI
 set(RUST_PLATFORM_TARGET "")
 if("${OS_NAME}" STREQUAL "linux")
     if ("${OS_ARCH}" STREQUAL "arm64")
+        set(RUST_PLATFORM_TARGET "aarch64-unknown-linux-gnu")
+    elseif("${CMAKE_CXX_COMPILER}" MATCHES "aarch64")
+        set(RUST_ENV_VARS ${RUST_ENV_VARS} CFLAGS_aarch64_unknown_linux_gnu=--sysroot=/usr/aarch64-linux-gnu)
+        set(RUST_ENV_VARS ${RUST_ENV_VARS} CARGO_TARGET_AARCH64_UNKNOWN_LINUX_GNU_LINKER=aarch64-linux-gnu-gcc)
+        set(RUST_ENV_VARS ${RUST_ENV_VARS} OPENSSL_LIB_DIR=${CMAKE_BINARY_DIR}/vcpkg_installed/${VCPKG_TARGET_TRIPLET}/lib)
+        set(RUST_ENV_VARS ${RUST_ENV_VARS} OPENSSL_INCLUDE_DIR=${CMAKE_BINARY_DIR}/vcpkg_installed/${VCPKG_TARGET_TRIPLET}/include)
         set(RUST_PLATFORM_TARGET "aarch64-unknown-linux-gnu")
     else()
         set(RUST_PLATFORM_TARGET "x86_64-unknown-linux-gnu")
@@ -56,20 +64,33 @@ elseif("${OS_NAME}" STREQUAL "osx")
     endif()
 endif()
 
+string(STRIP "${RUST_ENV_VARS}" RUST_ENV_VARS)
+
+# Having these set will mess up cross compilation to linux arm
+set(RUST_UNSET_ENV_VARS --unset=CC --unset=CXX --unset=LD)
+
 # Add rust_example as a CMake target
 ExternalProject_Add(
         ${KERNEL_NAME}
         GIT_REPOSITORY "https://github.com/delta-incubator/delta-kernel-rs"
         GIT_TAG 08f0764a00e89f42136fd478823d28278adc7ee8
-        CONFIGURE_COMMAND ""
+        # Prints the env variables passed to the cargo build to the terminal, useful in debugging because passing them
+        # through CMake is an error-prone mess
+        CONFIGURE_COMMAND ${CMAKE_COMMAND} -E env ${RUST_UNSET_ENV_VARS} ${RUST_ENV_VARS} env
         UPDATE_COMMAND ""
         BUILD_IN_SOURCE 1
         # Build debug build
-        BUILD_COMMAND cargo build --package delta_kernel_ffi --workspace --all-features --target=${RUST_PLATFORM_TARGET}
+        BUILD_COMMAND
+            ${CMAKE_COMMAND} -E env ${RUST_UNSET_ENV_VARS} ${RUST_ENV_VARS}
+            cargo build --package delta_kernel_ffi --workspace --all-features --target=${RUST_PLATFORM_TARGET}
         # Build release build
-        COMMAND cargo build --package delta_kernel_ffi --workspace --all-features --release --target=${RUST_PLATFORM_TARGET}
+        COMMAND
+            ${CMAKE_COMMAND} -E env ${RUST_UNSET_ENV_VARS} ${RUST_ENV_VARS}
+            cargo build --package delta_kernel_ffi --workspace --all-features --release --target=${RUST_PLATFORM_TARGET}
         # Build DATs
-        COMMAND cargo build --manifest-path=${CMAKE_BINARY_DIR}/rust/src/delta_kernel/acceptance/Cargo.toml
+        COMMAND
+            ${CMAKE_COMMAND} -E env ${RUST_UNSET_ENV_VARS} ${RUST_ENV_VARS}
+            cargo build --manifest-path=${CMAKE_BINARY_DIR}/rust/src/delta_kernel/acceptance/Cargo.toml
         BUILD_BYPRODUCTS "${CMAKE_BINARY_DIR}/rust/src/delta_kernel/target/${RUST_PLATFORM_TARGET}/debug/libdelta_kernel_ffi.a"
         BUILD_BYPRODUCTS "${CMAKE_BINARY_DIR}/rust/src/delta_kernel/target/${RUST_PLATFORM_TARGET}/release/libdelta_kernel_ffi.a"
         BUILD_BYPRODUCTS "${CMAKE_BINARY_DIR}/rust/src/delta_kernel/target/ffi-headers/delta_kernel_ffi.h"
