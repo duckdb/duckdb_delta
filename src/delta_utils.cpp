@@ -262,7 +262,7 @@ uintptr_t PredicateVisitor::VisitConstantFilter(const string &col_name, const Co
         case LogicalType::VARCHAR: {
             // WARNING: C++ lifetime extension rules don't protect calls of the form foo(std::string(...).c_str())
             auto str = StringValue::Get(value);
-            auto maybe_right = ffi::visit_expression_literal_string(state, KernelUtils::ToDeltaString(value), DuckDBEngineError::AllocateError);
+            auto maybe_right = ffi::visit_expression_literal_string(state, KernelUtils::ToDeltaString(str), DuckDBEngineError::AllocateError);
             right = KernelUtils::UnpackResult(maybe_right, "VisitConstantFilter failed to visit_expression_literal_string");
             break;
         }
