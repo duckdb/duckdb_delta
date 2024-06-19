@@ -24,7 +24,7 @@ if(APPLE)
 elseif(UNIX)
     set(PLATFORM_LIBS m c resolv)
 elseif(WIN32)
-    set(PLATFORM_LIBS ws2_32 userenv advapi32)
+    set(PLATFORM_LIBS ntdll ncrypt secur32 ws2_32 userenv bcrypt msvcrt advapi32)
 else()
     message(STATUS "UNKNOWN OS")
 endif()
@@ -52,27 +52,53 @@ if("${OS_NAME}" STREQUAL "linux")
         set(RUST_PLATFORM_TARGET "x86_64-unknown-linux-gnu")
     endif()
 elseif("${OS_NAME}" STREQUAL "osx")
-    # TODO: clean up upstream; we are not correctly setting OS_ARCH for cross compile
     if ("${OSX_BUILD_ARCH}" STREQUAL "arm64")
         set(RUST_PLATFORM_TARGET "aarch64-apple-darwin")
     elseif ("${OSX_BUILD_ARCH}" STREQUAL "x86_64")
         set(RUST_PLATFORM_TARGET "x86_64-apple-darwin")
     elseif ("${OS_ARCH}" STREQUAL "arm64")
         set(RUST_PLATFORM_TARGET "aarch64-apple-darwin")
-    else()
-        set(RUST_PLATFORM_TARGET "x86_64-apple-darwin")
+    endif()
+elseif(WIN32)
+    if (MINGW AND "${OS_ARCH}" STREQUAL "arm64")
+        set(RUST_PLATFORM_TARGET "aarch64-pc-windows-gnu")
+    elseif (MINGW AND "${OS_ARCH}" STREQUAL "amd64")
+        set(RUST_PLATFORM_TARGET "x86_64-pc-windows-gnu")
+    elseif (MSVC AND "${OS_ARCH}" STREQUAL "arm64")
+        set(RUST_PLATFORM_TARGET "aarch64-pc-windows-msvc")
+    elseif (MSVC AND "${OS_ARCH}" STREQUAL "amd64")
+        set(RUST_PLATFORM_TARGET "x86_64-pc-windows-msvc")
     endif()
 endif()
 
+# We currently only support the predefined targets.
+if ("${RUST_PLATFORM_TARGET}" STREQUAL "")
+    message(FATAL_ERROR "Failed to detect the correct platform")
+endif()
+
+set(RUST_PLATFORM_PARAM "--target=${RUST_PLATFORM_TARGET}")
+message(STATUS "Building for rust target: ${RUST_PLATFORM_TARGET}")
+
+# Remove whitespaces before and after to prevent messed up env variables
 string(STRIP "${RUST_ENV_VARS}" RUST_ENV_VARS)
 
 # Having these set will mess up cross compilation to linux arm
 set(RUST_UNSET_ENV_VARS --unset=CC --unset=CXX --unset=LD)
 
+# Define all the relevant delta-kernel-rs paths/names
+set(DELTA_KERNEL_LIBNAME "${CMAKE_STATIC_LIBRARY_PREFIX}delta_kernel_ffi${CMAKE_STATIC_LIBRARY_SUFFIX}")
+set(DELTA_KERNEL_LIBPATH_DEBUG "${CMAKE_BINARY_DIR}/rust/src/delta_kernel/target/${RUST_PLATFORM_TARGET}/debug/${DELTA_KERNEL_LIBNAME}")
+set(DELTA_KERNEL_LIBPATH_RELEASE "${CMAKE_BINARY_DIR}/rust/src/delta_kernel/target/${RUST_PLATFORM_TARGET}/release/${DELTA_KERNEL_LIBNAME}")
+set(DELTA_KERNEL_FFI_HEADER_PATH "${CMAKE_BINARY_DIR}/rust/src/delta_kernel/target/ffi-headers")
+set(DELTA_KERNEL_FFI_HEADER_C "${CMAKE_BINARY_DIR}/rust/src/delta_kernel/target/ffi-headers/delta_kernel_ffi.h")
+set(DELTA_KERNEL_FFI_HEADER_CXX "${CMAKE_BINARY_DIR}/rust/src/delta_kernel/target/ffi-headers/delta_kernel_ffi.hpp")
+
 # Add rust_example as a CMake target
 ExternalProject_Add(
         ${KERNEL_NAME}
         GIT_REPOSITORY "https://github.com/delta-incubator/delta-kernel-rs"
+        # WARNING: the FFI headers are currently pinned due to the C linkage issue of the c++ headers. Currently, when bumping
+        # the kernel version, the produced header in ./src/include/delta_kernel_ffi.hpp should be also bumped, applying the fix
         GIT_TAG 08f0764a00e89f42136fd478823d28278adc7ee8
         # Prints the env variables passed to the cargo build to the terminal, useful in debugging because passing them
         # through CMake is an error-prone mess
@@ -82,27 +108,28 @@ ExternalProject_Add(
         # Build debug build
         BUILD_COMMAND
             ${CMAKE_COMMAND} -E env ${RUST_UNSET_ENV_VARS} ${RUST_ENV_VARS}
-            cargo build --package delta_kernel_ffi --workspace --all-features --target=${RUST_PLATFORM_TARGET}
+            cargo build --package delta_kernel_ffi --workspace --all-features ${RUST_PLATFORM_PARAM}
         # Build release build
         COMMAND
             ${CMAKE_COMMAND} -E env ${RUST_UNSET_ENV_VARS} ${RUST_ENV_VARS}
-            cargo build --package delta_kernel_ffi --workspace --all-features --release --target=${RUST_PLATFORM_TARGET}
+            cargo build --package delta_kernel_ffi --workspace --all-features --release ${RUST_PLATFORM_PARAM}
         # Build DATs
         COMMAND
             ${CMAKE_COMMAND} -E env ${RUST_UNSET_ENV_VARS} ${RUST_ENV_VARS}
             cargo build --manifest-path=${CMAKE_BINARY_DIR}/rust/src/delta_kernel/acceptance/Cargo.toml
-        BUILD_BYPRODUCTS "${CMAKE_BINARY_DIR}/rust/src/delta_kernel/target/${RUST_PLATFORM_TARGET}/debug/libdelta_kernel_ffi.a"
-        BUILD_BYPRODUCTS "${CMAKE_BINARY_DIR}/rust/src/delta_kernel/target/${RUST_PLATFORM_TARGET}/release/libdelta_kernel_ffi.a"
-        BUILD_BYPRODUCTS "${CMAKE_BINARY_DIR}/rust/src/delta_kernel/target/ffi-headers/delta_kernel_ffi.h"
-        BUILD_BYPRODUCTS "${CMAKE_BINARY_DIR}/rust/src/delta_kernel/target/ffi-headers/delta_kernel_ffi.hpp"
+        # Define the byproducts, required for building with Ninja
+        BUILD_BYPRODUCTS "${DELTA_KERNEL_LIBPATH_DEBUG}"
+        BUILD_BYPRODUCTS "${DELTA_KERNEL_LIBPATH_RELEASE}"
+        BUILD_BYPRODUCTS "${DELTA_KERNEL_FFI_HEADER_C}"
+        BUILD_BYPRODUCTS "${DELTA_KERNEL_FFI_HEADER_CXX}"
         INSTALL_COMMAND ""
         LOG_BUILD ON)
 
 build_static_extension(${TARGET_NAME} ${EXTENSION_SOURCES})
 build_loadable_extension(${TARGET_NAME} " " ${EXTENSION_SOURCES})
 
-include_directories(${CMAKE_BINARY_DIR}/rust/src/delta_kernel/target/ffi-headers)
-include_directories(${CMAKE_BINARY_DIR}/rust/src/delta_kernel/target/ffi-headers)
+# TODO: when C linkage issue is resolved, we should switch back to using the generated headers
+#include_directories(${DELTA_KERNEL_FFI_HEADER_PATH})
 
 # Hides annoying linker warnings
 set(CMAKE_OSX_DEPLOYMENT_TARGET 13.3 CACHE STRING "Minimum OS X deployment version" FORCE)
