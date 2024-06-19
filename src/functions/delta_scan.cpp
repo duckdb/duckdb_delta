@@ -587,7 +587,6 @@ TableFunctionSet DeltaFunctions::GetDeltaScanFunction(DatabaseInstance &instance
         function.deserialize = nullptr;
         function.statistics = nullptr;
         function.table_scan_progress = nullptr;
-        function.cardinality = nullptr;
         function.get_bind_info = nullptr;
 
         // Schema param is just confusing here

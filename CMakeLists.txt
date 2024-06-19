@@ -48,6 +48,12 @@ if("${OS_NAME}" STREQUAL "linux")
         set(RUST_ENV_VARS ${RUST_ENV_VARS} OPENSSL_LIB_DIR=${CMAKE_BINARY_DIR}/vcpkg_installed/${VCPKG_TARGET_TRIPLET}/lib)
         set(RUST_ENV_VARS ${RUST_ENV_VARS} OPENSSL_INCLUDE_DIR=${CMAKE_BINARY_DIR}/vcpkg_installed/${VCPKG_TARGET_TRIPLET}/include)
         set(RUST_PLATFORM_TARGET "aarch64-unknown-linux-gnu")
+    elseif("${CMAKE_CXX_COMPILER}" MATCHES "aarch64")
+        set(RUST_ENV_VARS ${RUST_ENV_VARS} CFLAGS_aarch64_unknown_linux_gnu=--sysroot=/usr/aarch64-linux-gnu)
+        set(RUST_ENV_VARS ${RUST_ENV_VARS} CARGO_TARGET_AARCH64_UNKNOWN_LINUX_GNU_LINKER=aarch64-linux-gnu-gcc)
+        set(RUST_ENV_VARS ${RUST_ENV_VARS} OPENSSL_LIB_DIR=${CMAKE_BINARY_DIR}/vcpkg_installed/${VCPKG_TARGET_TRIPLET}/lib)
+        set(RUST_ENV_VARS ${RUST_ENV_VARS} OPENSSL_INCLUDE_DIR=${CMAKE_BINARY_DIR}/vcpkg_installed/${VCPKG_TARGET_TRIPLET}/include)
+        set(RUST_PLATFORM_TARGET "aarch64-unknown-linux-gnu")
     else()
         set(RUST_PLATFORM_TARGET "x86_64-unknown-linux-gnu")
     endif()
@@ -96,10 +102,10 @@ set(DELTA_KERNEL_FFI_HEADER_CXX "${CMAKE_BINARY_DIR}/rust/src/delta_kernel/targe
 # Add rust_example as a CMake target
 ExternalProject_Add(
         ${KERNEL_NAME}
-        GIT_REPOSITORY "https://github.com/delta-incubator/delta-kernel-rs"
+        GIT_REPOSITORY "https://github.com/nicklan/delta-kernel-rs"
         # WARNING: the FFI headers are currently pinned due to the C linkage issue of the c++ headers. Currently, when bumping
         # the kernel version, the produced header in ./src/include/delta_kernel_ffi.hpp should be also bumped, applying the fix
-        GIT_TAG 08f0764a00e89f42136fd478823d28278adc7ee8
+        GIT_TAG 181232a45562ca78be763c2f5fb46b88a2463b5c
         # Prints the env variables passed to the cargo build to the terminal, useful in debugging because passing them
         # through CMake is an error-prone mess
         CONFIGURE_COMMAND ${CMAKE_COMMAND} -E env ${RUST_UNSET_ENV_VARS} ${RUST_ENV_VARS} env

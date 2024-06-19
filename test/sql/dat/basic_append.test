@@ -56,9 +56,6 @@ FROM delta_scan('${DAT_PATH}/out/reader_tests/generated/basic_append/delta')
 2
 3
 
-# TODO: Figure out what's wrong here
-mode skip
-
 # Now we add a filter that filters out one of the files
 query II
 SELECT letter, number
@@ -67,8 +64,6 @@ WHERE number < 2
 ----
 a	1
 
-mode unskip
-
 # Now we add a filter that filters out the other file
 query III
 SELECT a_float, letter, number, 
@@ -76,8 +71,6 @@ FROM delta_scan('${DAT_PATH}/out/reader_tests/generated/basic_append/delta')
 WHERE number > 4
 ----
 5.5	e	5
-
-mode skip
 
 # Now we add a filter that filters out all columns
 query III

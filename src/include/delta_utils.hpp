@@ -5,6 +5,7 @@
 #include "duckdb/planner/filter/conjunction_filter.hpp"
 #include "duckdb/common/enum_util.hpp"
 #include <iostream>
+#include <duckdb/planner/filter/null_filter.hpp>
 
 // TODO: clean up this file as we go
 
@@ -140,6 +141,10 @@ private:
 
     uintptr_t VisitConstantFilter(const string &col_name, const ConstantFilter &filter, ffi::KernelExpressionVisitorState* state);
     uintptr_t VisitAndFilter(const string &col_name, const ConjunctionAndFilter &filter, ffi::KernelExpressionVisitorState* state);
+
+    uintptr_t VisitIsNull(const string &col_name, ffi::KernelExpressionVisitorState* state);
+    uintptr_t VisitIsNotNull(const string &col_name, ffi::KernelExpressionVisitorState* state);
+
     uintptr_t VisitFilter(const string &col_name, const TableFilter &filter, ffi::KernelExpressionVisitorState* state);
 };
 

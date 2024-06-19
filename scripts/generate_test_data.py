@@ -78,7 +78,8 @@ def generate_test_data_pyspark(name, current_path, input_path, delete_predicate 
 
     ## CREATE
     ## CONFIGURE USAGE OF DELETION VECTORS
-    spark.sql(f"ALTER TABLE test_table_{name} SET TBLPROPERTIES ('delta.enableDeletionVectors' = true);")
+    if (delete_predicate):
+        spark.sql(f"ALTER TABLE test_table_{name} SET TBLPROPERTIES ('delta.enableDeletionVectors' = true);")
 
     ## ADDING DELETES
     deltaTable = DeltaTable.forPath(spark, delta_table_path)
@@ -115,6 +116,11 @@ generate_test_data_delta_rs("lineitem_sf1_10part", query, "part")
 query = "CREATE table test_table AS SELECT {'i':i, 'j':i+1} as value, i%2 as part from range(0,10) tbl(i);"
 generate_test_data_delta_rs("simple_partitioned_with_structs", query, "part");
 
+## Partitioned table with all types we can file skip on
+for type in ["bool", "int", "tinyint", "smallint", "bigint", "float", "double", "varchar"]:
+    query = f"CREATE table test_table as select i::{type} as value, i::{type} as part from range(0,2) tbl(i)"
+    generate_test_data_delta_rs(f"test_file_skipping/{type}", query, "part");
+
 ## Simple table with deletion vector
 con = duckdb.connect()
 con.query(f"COPY (SELECT i as id, ('val' || i::VARCHAR) as value  FROM range(0,1000000) tbl(i))TO '{TMP_PATH}/simple_sf1_with_dv.parquet'")
@@ -135,6 +141,12 @@ con = duckdb.connect()
 con.query(f"call dbgen(sf=0.01); EXPORT DATABASE '{TMP_PATH}/tpch_sf0_01_export' (FORMAT parquet)")
 for table in ["customer","lineitem","nation","orders","part","partsupp","region","supplier"]:
     generate_test_data_pyspark(f"tpch_sf0_01_{table}", f'tpch_sf0_01/{table}', f'{TMP_PATH}/tpch_sf0_01_export/{table}.parquet')
+
+## TPCH SF1 full dataset
+con = duckdb.connect()
+con.query(f"call dbgen(sf=1); EXPORT DATABASE '{TMP_PATH}/tpch_sf1_export' (FORMAT parquet)")
+for table in ["customer","lineitem","nation","orders","part","partsupp","region","supplier"]:
+    generate_test_data_pyspark(f"tpch_sf1_{table}", f'tpch_sf1/{table}', f'{TMP_PATH}/tpch_sf1_export/{table}.parquet')
 
 ## TPCDS SF0.01 full dataset
 con = duckdb.connect()
