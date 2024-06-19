@@ -48,6 +48,7 @@ enum class KernelError {
   InvalidColumnMappingMode,
   InvalidTableLocation,
   InvalidDecimalError,
+  InvalidStructData,
 };
 
 #if defined(DEFINE_DEFAULT_ENGINE)
@@ -62,7 +63,7 @@ struct CStringMap;
 /// this struct can be used by an engine to materialize a selection vector
 struct DvInfo;
 
-#if (defined(DEFINE_DEFAULT_ENGINE) || defined(DEFINE_SYNC_ENGINE))
+#if defined(DEFINE_DEFAULT_ENGINE)
 /// A builder that allows setting options on the `Engine` before actually building it
 struct EngineBuilder;
 #endif
@@ -352,8 +353,9 @@ void set_builder_option(EngineBuilder *builder, KernelStringSlice key, KernelStr
 #endif
 
 #if defined(DEFINE_DEFAULT_ENGINE)
-/// Consume the builder and return an engine. After calling, the passed pointer is _no
+/// Consume the builder and return a `default` engine. After calling, the passed pointer is _no
 /// longer valid_.
+///
 ///
 /// # Safety
 ///
@@ -367,6 +369,13 @@ ExternResult<Handle<SharedExternEngine>> builder_build(EngineBuilder *builder);
 /// Caller is responsible for passing a valid path pointer.
 ExternResult<Handle<SharedExternEngine>> get_default_engine(KernelStringSlice path,
                                                             AllocateErrorFn allocate_error);
+#endif
+
+#if defined(DEFINE_SYNC_ENGINE)
+/// # Safety
+///
+/// Caller is responsible for passing a valid path pointer.
+ExternResult<Handle<SharedExternEngine>> get_sync_engine(AllocateErrorFn allocate_error);
 #endif
 
 /// # Safety
@@ -422,13 +431,29 @@ ExternResult<uintptr_t> visit_expression_column(KernelExpressionVisitorState *st
                                                 KernelStringSlice name,
                                                 AllocateErrorFn allocate_error);
 
+uintptr_t visit_expression_not(KernelExpressionVisitorState *state, uintptr_t inner_expr);
+
+uintptr_t visit_expression_is_null(KernelExpressionVisitorState *state, uintptr_t inner_expr);
+
 /// # Safety
 /// The string slice must be valid
 ExternResult<uintptr_t> visit_expression_literal_string(KernelExpressionVisitorState *state,
                                                         KernelStringSlice value,
                                                         AllocateErrorFn allocate_error);
 
+uintptr_t visit_expression_literal_int(KernelExpressionVisitorState *state, int32_t value);
+
 uintptr_t visit_expression_literal_long(KernelExpressionVisitorState *state, int64_t value);
+
+uintptr_t visit_expression_literal_short(KernelExpressionVisitorState *state, int16_t value);
+
+uintptr_t visit_expression_literal_byte(KernelExpressionVisitorState *state, int8_t value);
+
+uintptr_t visit_expression_literal_float(KernelExpressionVisitorState *state, float value);
+
+uintptr_t visit_expression_literal_double(KernelExpressionVisitorState *state, double value);
+
+uintptr_t visit_expression_literal_bool(KernelExpressionVisitorState *state, bool value);
 
 /// Allow an engine to "unwrap" an [`EngineData`] into the raw pointer for the case it wants
 /// to use its own engine data format
@@ -532,6 +557,5 @@ void visit_scan_data(Handle<EngineData> data,
                      CScanCallback callback);
 
 } // extern "C"
-
 
 } // namespace ffi
