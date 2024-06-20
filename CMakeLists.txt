@@ -139,15 +139,15 @@ add_compile_definitions(DEFINE_DEFAULT_ENGINE)
 
 # Link delta-kernal-rs to static lib
 target_link_libraries(${EXTENSION_NAME}
-        debug "${CMAKE_BINARY_DIR}/rust/src/delta_kernel/target/${RUST_PLATFORM_TARGET}/debug/libdelta_kernel_ffi.a"
-        optimized "${CMAKE_BINARY_DIR}/rust/src/delta_kernel/target/${RUST_PLATFORM_TARGET}/release/libdelta_kernel_ffi.a"
+        debug ${DELTA_KERNEL_LIBPATH_DEBUG}
+        optimized ${DELTA_KERNEL_LIBPATH_RELEASE}
         ${PLATFORM_LIBS})
 add_dependencies(${EXTENSION_NAME} delta_kernel)
 
 # Link delta-kernal-rs to dynamic lib
 target_link_libraries(${LOADABLE_EXTENSION_NAME}
-        debug "${CMAKE_BINARY_DIR}/rust/src/delta_kernel/target/${RUST_PLATFORM_TARGET}/debug/libdelta_kernel_ffi.a"
-        optimized "${CMAKE_BINARY_DIR}/rust/src/delta_kernel/target/${RUST_PLATFORM_TARGET}/release/libdelta_kernel_ffi.a"
+        debug ${DELTA_KERNEL_LIBPATH_DEBUG}
+        optimized ${DELTA_KERNEL_LIBPATH_RELEASE}
         ${PLATFORM_LIBS})
 add_dependencies(${LOADABLE_EXTENSION_NAME} delta_kernel)
 
