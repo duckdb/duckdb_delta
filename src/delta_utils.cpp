@@ -170,10 +170,10 @@ vector<bool> KernelUtils::FromDeltaBoolSlice(const struct ffi::KernelBoolSlice s
     return result;
 }
 
-PredicateVisitor::PredicateVisitor(const vector<string> &column_names, optional_ptr<TableFilterSet> filters) : EnginePredicate {
-        .predicate = this,
-        .visitor = (uintptr_t (*)(void*, ffi::KernelExpressionVisitorState*)) &VisitPredicate}
-{
+PredicateVisitor::PredicateVisitor(const vector<string> &column_names, optional_ptr<TableFilterSet> filters) {
+    predicate = this;
+    visitor = (uintptr_t (*)(void*, ffi::KernelExpressionVisitorState*)) &VisitPredicate;
+
     if (filters) {
         for (auto& filter : filters->filters) {
             column_filters[column_names[filter.first]] = filter.second.get();
@@ -191,7 +191,7 @@ static auto GetNextFromCallable(Callable* callable) -> decltype(std::declval<Cal
 template <typename Callable>
 ffi::EngineIterator EngineIteratorFromCallable(Callable& callable) {
     auto* get_next = &GetNextFromCallable<Callable>;
-    return {.data = &callable, .get_next = (const void *(*)(void*)) get_next};
+    return {&callable, (const void *(*)(void*)) get_next};
 };
 
 // Helper function to prevent pushing down filters kernel cant handle
