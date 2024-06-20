@@ -54,12 +54,6 @@ SELECT *
 FROM parquet_scan('${DAT_PATH}/out/reader_tests/generated/with_schema_change/expected/latest/**/*.parquet')
 ----
 
-
-### FAILING DAT TESTS
-
-# TODO fix all of these
-mode skip
-
 # basic_partitioned
 query I rowsort basic_partitioned
 SELECT *
@@ -70,6 +64,14 @@ query I rowsort basic_partitioned
 SELECT *
 FROM parquet_scan('${DAT_PATH}/out/reader_tests/generated/basic_partitioned/expected/latest/**/*.parquet')
 ----
+
+### FAILING DAT TESTS
+
+# TODO fix all of these
+mode skip
+
+# Fetches path containing`letter=%252F%252520%2525f` from kernel
+# Should be letter= %2F%2520%25f, which means its doubly url encoded
 
 # multi_partitioned
 query I rowsort multi_partitioned
