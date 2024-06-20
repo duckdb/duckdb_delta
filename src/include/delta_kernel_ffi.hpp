@@ -28,7 +28,7 @@ enum class KernelError {
   ObjectStorePathError,
 #endif
 #if defined(DEFINE_DEFAULT_ENGINE)
-  Reqwest,
+  ReqwestError,
 #endif
   FileNotFoundError,
   MissingColumnError,
@@ -45,10 +45,10 @@ enum class KernelError {
   JoinFailureError,
   Utf8Error,
   ParseIntError,
-  InvalidColumnMappingMode,
-  InvalidTableLocation,
+  InvalidColumnMappingModeError,
+  InvalidTableLocationError,
   InvalidDecimalError,
-  InvalidStructData,
+  InvalidStructDataError,
 };
 
 #if defined(DEFINE_DEFAULT_ENGINE)

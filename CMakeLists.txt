@@ -96,10 +96,10 @@ set(DELTA_KERNEL_FFI_HEADER_CXX "${CMAKE_BINARY_DIR}/rust/src/delta_kernel/targe
 # Add rust_example as a CMake target
 ExternalProject_Add(
         ${KERNEL_NAME}
-        GIT_REPOSITORY "https://github.com/nicklan/delta-kernel-rs"
+        GIT_REPOSITORY "https://github.com/delta-incubator/delta-kernel-rs"
         # WARNING: the FFI headers are currently pinned due to the C linkage issue of the c++ headers. Currently, when bumping
         # the kernel version, the produced header in ./src/include/delta_kernel_ffi.hpp should be also bumped, applying the fix
-        GIT_TAG 181232a45562ca78be763c2f5fb46b88a2463b5c
+        GIT_TAG 6f95fd3bfaaa57698d72f539f8c6a0475a52c4e7
         # Prints the env variables passed to the cargo build to the terminal, useful in debugging because passing them
         # through CMake is an error-prone mess
         CONFIGURE_COMMAND ${CMAKE_COMMAND} -E env ${RUST_UNSET_ENV_VARS} ${RUST_ENV_VARS} env
