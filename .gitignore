@@ -7,3 +7,7 @@ testext
 test/python/__pycache__/
 .Rhistory
 data/generated
+__azurite*__.json
+__blobstorage__
+.venv
+.vscode
