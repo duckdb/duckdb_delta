@@ -10,7 +10,9 @@ duckdb_extension_load(delta
 duckdb_extension_load(httpfs)
 
 # Build the azure extension to test with azure
-duckdb_extension_load(azure)
+duckdb_extension_load(azure
+    SOURCE_DIR ${CMAKE_CURRENT_LIST_DIR}/duckdb_azure
+)
 
 # Build the tpch and tpcds extension for testing/benchmarking
 duckdb_extension_load(tpch)
