@@ -3,6 +3,7 @@
 #include "duckdb.hpp"
 #include "duckdb/main/extension_util.hpp"
 #include <duckdb/parser/parsed_data/create_scalar_function_info.hpp>
+#include <duckdb/planner/filter/null_filter.hpp>
 
 namespace duckdb {
 
@@ -169,10 +170,10 @@ vector<bool> KernelUtils::FromDeltaBoolSlice(const struct ffi::KernelBoolSlice s
     return result;
 }
 
-PredicateVisitor::PredicateVisitor(const vector<string> &column_names, optional_ptr<TableFilterSet> filters) : EnginePredicate {
-        .predicate = this,
-        .visitor = (uintptr_t (*)(void*, ffi::KernelExpressionVisitorState*)) &VisitPredicate}
-{
+PredicateVisitor::PredicateVisitor(const vector<string> &column_names, optional_ptr<TableFilterSet> filters) {
+    predicate = this;
+    visitor = (uintptr_t (*)(void*, ffi::KernelExpressionVisitorState*)) &VisitPredicate;
+
     if (filters) {
         for (auto& filter : filters->filters) {
             column_filters[column_names[filter.first]] = filter.second.get();
@@ -190,7 +191,7 @@ static auto GetNextFromCallable(Callable* callable) -> decltype(std::declval<Cal
 template <typename Callable>
 ffi::EngineIterator EngineIteratorFromCallable(Callable& callable) {
     auto* get_next = &GetNextFromCallable<Callable>;
-    return {.data = &callable, .get_next = (const void *(*)(void*)) get_next};
+    return {&callable, (const void *(*)(void*)) get_next};
 };
 
 // Helper function to prevent pushing down filters kernel cant handle
@@ -198,6 +199,10 @@ ffi::EngineIterator EngineIteratorFromCallable(Callable& callable) {
 static bool CanHandleFilter(TableFilter *filter) {
     switch (filter->filter_type) {
         case TableFilterType::CONSTANT_COMPARISON:
+            return true;
+        case TableFilterType::IS_NULL:
+            return true;
+        case TableFilterType::IS_NOT_NULL:
             return true;
         case TableFilterType::CONJUNCTION_AND: {
             auto &conjunction = static_cast<const ConjunctionAndFilter&>(*filter);
@@ -226,7 +231,7 @@ static unordered_map<string, TableFilter*> PrunePredicates(unordered_map<string,
 }
 
 uintptr_t PredicateVisitor::VisitPredicate(PredicateVisitor* predicate, ffi::KernelExpressionVisitorState* state) {
-    auto filters = PrunePredicates(predicate->column_filters);
+    auto filters = predicate->column_filters;
 
     auto it = filters.begin();
     auto end = filters.end();
@@ -257,16 +262,31 @@ uintptr_t PredicateVisitor::VisitConstantFilter(const string &col_name, const Co
         case LogicalType::BIGINT:
             right = visit_expression_literal_long(state, BigIntValue::Get(value));
             break;
-
-
+        case LogicalType::INTEGER:
+            right = visit_expression_literal_int(state, IntegerValue::Get(value));
+            break;
+        case LogicalType::SMALLINT:
+            right = visit_expression_literal_short(state, SmallIntValue::Get(value));
+            break;
+        case LogicalType::TINYINT:
+            right = visit_expression_literal_byte(state, TinyIntValue::Get(value));
+            break;
+        case LogicalType::FLOAT:
+            right = visit_expression_literal_float(state, FloatValue::Get(value));
+            break;
+        case LogicalType::DOUBLE:
+            right = visit_expression_literal_double(state, DoubleValue::Get(value));
+            break;
+         case LogicalType::BOOLEAN:
+            right = visit_expression_literal_bool(state, BooleanValue::Get(value));
+            break;
         case LogicalType::VARCHAR: {
             // WARNING: C++ lifetime extension rules don't protect calls of the form foo(std::string(...).c_str())
             auto str = StringValue::Get(value);
-            auto maybe_right = ffi::visit_expression_literal_string(state, KernelUtils::ToDeltaString(col_name), DuckDBEngineError::AllocateError);
+            auto maybe_right = ffi::visit_expression_literal_string(state, KernelUtils::ToDeltaString(str), DuckDBEngineError::AllocateError);
             right = KernelUtils::UnpackResult(maybe_right, "VisitConstantFilter failed to visit_expression_literal_string");
             break;
         }
-
         default:
             break; // unsupported type
     }
@@ -299,10 +319,21 @@ uintptr_t PredicateVisitor::VisitAndFilter(const string &col_name, const Conjunc
             return 0;
         }
         auto &child_filter = *it++;
+
         return VisitFilter(col_name, *child_filter, state);
     };
     auto eit = EngineIteratorFromCallable(get_next);
     return visit_expression_and(state, &eit);
+}
+
+uintptr_t PredicateVisitor::VisitIsNull(const string &col_name, ffi::KernelExpressionVisitorState *state) {
+    auto maybe_inner = ffi::visit_expression_column(state, KernelUtils::ToDeltaString(col_name), DuckDBEngineError::AllocateError);
+    uintptr_t inner = KernelUtils::UnpackResult(maybe_inner, "VisitIsNull failed to visit_expression_column");
+    return ffi::visit_expression_is_null(state, inner);
+}
+
+uintptr_t PredicateVisitor::VisitIsNotNull(const string &col_name, ffi::KernelExpressionVisitorState *state) {
+    return ffi::visit_expression_not(state, VisitIsNull(col_name, state));
 }
 
 uintptr_t PredicateVisitor::VisitFilter(const string &col_name, const TableFilter &filter, ffi::KernelExpressionVisitorState* state) {
@@ -311,8 +342,12 @@ uintptr_t PredicateVisitor::VisitFilter(const string &col_name, const TableFilte
             return VisitConstantFilter(col_name, static_cast<const ConstantFilter&>(filter), state);
         case TableFilterType::CONJUNCTION_AND:
             return VisitAndFilter(col_name, static_cast<const ConjunctionAndFilter&>(filter), state);
+        case TableFilterType::IS_NULL:
+            return VisitIsNull(col_name, state);
+        case TableFilterType::IS_NOT_NULL:
+            return VisitIsNotNull(col_name, state);
         default:
-            throw NotImplementedException("Attempted to push down unimplemented filter type: '%s'", EnumUtil::ToString(filter.filter_type));
+            return ~0;
     }
 }
 

@@ -140,8 +140,14 @@ jobs:
           ./duckdb/scripts/setup_manylinux2014.sh general aws-cli ccache ssh python_alias openssl
 
       - name: Setup Rust
-        if: ${{ matrix.duckdb_arch == 'linux_amd64' }}
+        if: ${{ matrix.duckdb_arch == 'linux_amd64'}}
         uses: dtolnay/rust-toolchain@stable
+
+      - name: Setup Rust for cross compilation
+        if: ${{ matrix.duckdb_arch == 'linux_arm64'}}
+        uses: dtolnay/rust-toolchain@stable
+        with:
+          targets: aarch64-unknown-linux-gnu
 
       - name: Setup Rust for manylinux (dtolnay/rust-toolchain doesn't work due to curl being old here)
         if: ${{ matrix.duckdb_arch == 'linux_amd64_gcc4' }}
@@ -311,6 +317,9 @@ jobs:
         with:
           python-version: '3.11'
 
+      - name: Setup Rust
+        uses: dtolnay/rust-toolchain@stable
+
       - uses: r-lib/actions/setup-r@v2
         if: matrix.duckdb_arch == 'windows_amd64_rtools'
         with:
@@ -334,22 +343,17 @@ jobs:
         with:
           vcpkgGitCommitId: ${{ inputs.vcpkg_commit }}
 
-      - name: Fix for MSVC issue
-        shell: bash
-        env:
-          OVERLAY_TRIPLET_SRC:  ${{ github.workspace }}/vcpkg/triplets/community/x64-windows-static-md.cmake
-          OVERLAY_TRIPLET_DST:  ${{ github.workspace }}/overlay_triplets/x64-windows-static-md.cmake
-        run: |
-          mkdir overlay_triplets
-          cp $OVERLAY_TRIPLET_SRC $OVERLAY_TRIPLET_DST
-          echo "set(VCPKG_PLATFORM_TOOLSET_VERSION "14.38")" >> $OVERLAY_TRIPLET_DST
-
       - name: Build & test extension
         env:
           VCPKG_OVERLAY_TRIPLETS: "${{ github.workspace }}/overlay_triplets"
           DUCKDB_PLATFORM: ${{ matrix.duckdb_arch }}
         run: |
           make test_release
+
+      - name: Error log
+        if: always()
+        run: |
+          cat build/release/rust/src/delta_kernel-stamp/delta_kernel-build-*.log
 
       - uses: actions/upload-artifact@v2
         with:
