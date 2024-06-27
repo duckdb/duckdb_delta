@@ -66,16 +66,25 @@ static void visit_callback(ffi::NullableCvoid engine_context, struct ffi::Kernel
     ffi::visit_scan_data(engine_data, selection_vec, engine_context, visit_callback);
 }
 
-std::string parseFromConnectionString(const std::string& connectionString, const std::string& key) {
-    std::regex pattern(key + "=([^;]+);");
+string ParseAccountNameFromEndpoint(const string& endpoint) {
+    if (!StringUtil::StartsWith(endpoint, "https://")) {
+        return "";
+    }
+    auto result = endpoint.find('.', 8);
+    if (result == endpoint.npos) {
+        return "";
+    }
+    return endpoint.substr(8,result-8);
+}
+
+string parseFromConnectionString(const string& connectionString, const string& key) {
+    std::regex pattern(key + "=([^;]+)(?=;|$)");
     std::smatch matches;
     if (std::regex_search(connectionString, matches, pattern) && matches.size() > 1) {
         // The second match ([1]) contains the access key
         return matches[1].str();
-    } else {
-        // If no access key is found, return an empty string or handle as needed
-        return "";
     }
+    return "";
 }
 
 static ffi::EngineBuilder* CreateBuilder(ClientContext &context, const string &path) {
@@ -169,75 +178,72 @@ static ffi::EngineBuilder* CreateBuilder(ClientContext &context, const string &p
         ffi::set_builder_option(builder, KernelUtils::ToDeltaString("aws_region"), KernelUtils::ToDeltaString(region));
 
     } else if (secret_type == "azure") {
-        
         // azure seems to be super complicated as we need to cover duckdb azure plugin and delta RS builder
         // and both require different settings
-
         auto connection_string = kv_secret.TryGetValue("connection_string").ToString();
         auto account_name = kv_secret.TryGetValue("account_name").ToString();
         auto endpoint = kv_secret.TryGetValue("endpoint").ToString();
         auto client_id = kv_secret.TryGetValue("client_id").ToString();
         auto client_secret = kv_secret.TryGetValue("client_secret").ToString();
         auto tenant_id = kv_secret.TryGetValue("tenant_id").ToString();
-        auto certificate_path = kv_secret.TryGetValue("certificate_path").ToString();
-        auto http_proxy = kv_secret.TryGetValue("http_proxy").ToString();
-        auto proxy_user_name = kv_secret.TryGetValue("proxy_user_name").ToString();
-        auto proxy_password = kv_secret.TryGetValue("proxy_password").ToString();
         auto chain = kv_secret.TryGetValue("chain").ToString();
+        auto provider = kv_secret.GetProvider();
 
-        if (account_name == "devstoreaccount1" || connection_string.find("devstoreaccount1") != string::npos) {
-            ffi::set_builder_option(builder, KernelUtils::ToDeltaString("use_emulator"), KernelUtils::ToDeltaString("true")); //needed for delta RS builder
-        }
+        if (provider == "credential_chain") {
+            // Authentication option 1a: using the cli authentication
+            if (chain.find("cli") != std::string::npos) {
+                ffi::set_builder_option(builder, KernelUtils::ToDeltaString("use_azure_cli"), KernelUtils::ToDeltaString("true"));
+            }
+            // Authentication option 1b: non-cli credential chains will just "hope for the best" technically since we are using the default
+            // credential chain provider duckDB and delta-kernel-rs should find the same auth
+        } else if (!connection_string.empty() && connection_string != "NULL") {
 
-        if (!connection_string.empty() && connection_string != "NULL") {
-            ffi::set_builder_option(builder, KernelUtils::ToDeltaString("azure_storage_connection_string"), KernelUtils::ToDeltaString(connection_string)); //needed for duckdb azure plugin
-            ffi::set_builder_option(builder, KernelUtils::ToDeltaString("connection_string"), KernelUtils::ToDeltaString(connection_string)); //needed for duckdb azure plugin
+            // Authentication option 2: a connection string based on account key
+            auto account_key = parseFromConnectionString(connection_string, "AccountKey");
             account_name = parseFromConnectionString(connection_string, "AccountName");
-            ffi::set_builder_option(builder, KernelUtils::ToDeltaString("access_key"), KernelUtils::ToDeltaString(parseFromConnectionString(connection_string, "AccountKey"))); //needed for delta RS builder
+            // Authentication option 2: a connection string based on account key
+            if (!account_name.empty() && !account_key.empty()) {
+                ffi::set_builder_option(builder, KernelUtils::ToDeltaString("account_key"),
+                                        KernelUtils::ToDeltaString(account_key));
+            } else {
+                // Authentication option 2b: a connection string based on SAS token
+                endpoint = parseFromConnectionString(connection_string, "BlobEndpoint");
+                if (account_name.empty()) {
+                    account_name = ParseAccountNameFromEndpoint(endpoint);
+                }
+                auto sas_token = parseFromConnectionString(connection_string, "SharedAccessSignature");
+                if (!sas_token.empty()) {
+                    ffi::set_builder_option(builder, KernelUtils::ToDeltaString("sas_token"),
+                                            KernelUtils::ToDeltaString(sas_token));
+                }
+            }
+        } else if (provider == "service_principal") {
+            if (!client_id.empty() && client_id != "NULL") {
+                ffi::set_builder_option(builder, KernelUtils::ToDeltaString("azure_client_id"), KernelUtils::ToDeltaString(client_id));
+            }
+            if (!client_secret.empty() && client_secret != "NULL") {
+                ffi::set_builder_option(builder, KernelUtils::ToDeltaString("azure_client_secret"), KernelUtils::ToDeltaString(client_secret));
+            }
+            if (!tenant_id.empty() && tenant_id != "NULL") {
+                ffi::set_builder_option(builder, KernelUtils::ToDeltaString("azure_tenant_id"), KernelUtils::ToDeltaString(tenant_id));
+            }
+        } else {
+            // Authentication option 3: no authentication, just an account name
+            ffi::set_builder_option(builder, KernelUtils::ToDeltaString("azure_skip_signature"), KernelUtils::ToDeltaString("true"));
+        }
+        // Set the use_emulator option for when the azurite test server is used
+        if (account_name == "devstoreaccount1" || connection_string.find("devstoreaccount1") != string::npos) {
+            ffi::set_builder_option(builder, KernelUtils::ToDeltaString("use_emulator"), KernelUtils::ToDeltaString("true"));
         }
         if (!account_name.empty() && account_name != "NULL") {
-            ffi::set_builder_option(builder, KernelUtils::ToDeltaString("azure_account_name"), KernelUtils::ToDeltaString(account_name)); //needed for duckdb azure plugin
             ffi::set_builder_option(builder, KernelUtils::ToDeltaString("account_name"), KernelUtils::ToDeltaString(account_name)); //needed for delta RS builder
         }
         if (!endpoint.empty() && endpoint != "NULL") {
             ffi::set_builder_option(builder, KernelUtils::ToDeltaString("azure_endpoint"), KernelUtils::ToDeltaString(endpoint));
         } else {
-            ffi::set_builder_option(builder, KernelUtils::ToDeltaString("azure_endpoint"), KernelUtils::ToDeltaString("https://" + account_name + ".blob.core.windows.net/")); //needed? Does that work with dfs files system?
+            ffi::set_builder_option(builder, KernelUtils::ToDeltaString("azure_endpoint"), KernelUtils::ToDeltaString("https://" + account_name + ".blob.core.windows.net/"));
         }
-        if (!chain.empty() && chain != "NULL") {
-            ffi::set_builder_option(builder, KernelUtils::ToDeltaString("provider"), KernelUtils::ToDeltaString("credential_chain")); //needed for duckdb azure plugin
-
-            if (chain.find("cli") != std::string::npos) {
-                ffi::set_builder_option(builder, KernelUtils::ToDeltaString("use_azure_cli"), KernelUtils::ToDeltaString("true")); //dont know if that is the right way, but we need to tell delta RS builder to authenticate with azure cli
-            }
-            
-            ffi::set_builder_option(builder, KernelUtils::ToDeltaString("azure_credential_chain"), KernelUtils::ToDeltaString(chain)); //needed for duckdb azure plugin, dont know if all three are necessary
-            ffi::set_builder_option(builder, KernelUtils::ToDeltaString("credential_chain"), KernelUtils::ToDeltaString(chain)); //needed for duckdb azure plugin, dont know if all three are necessary
-            ffi::set_builder_option(builder, KernelUtils::ToDeltaString("chain"), KernelUtils::ToDeltaString(chain));  //needed for duckdb azure plugin, dont know if all three are necessary
-        }
-        if (!client_id.empty() && client_id != "NULL") {
-            ffi::set_builder_option(builder, KernelUtils::ToDeltaString("azure_client_id"), KernelUtils::ToDeltaString(client_id)); //untested
-        }
-        if (!client_secret.empty() && client_secret != "NULL") {
-            ffi::set_builder_option(builder, KernelUtils::ToDeltaString("azure_client_secret"), KernelUtils::ToDeltaString(client_secret)); //untested
-        }
-        if (!tenant_id.empty() && tenant_id != "NULL") {
-            ffi::set_builder_option(builder, KernelUtils::ToDeltaString("azure_tenant_id"), KernelUtils::ToDeltaString(tenant_id)); //needed for duckdb azure plugin
-        }
-        if (!certificate_path.empty() && certificate_path != "NULL") {
-            ffi::set_builder_option(builder, KernelUtils::ToDeltaString("azure_client_certificate_path"), KernelUtils::ToDeltaString(certificate_path)); //untested
-        }
-        if (!http_proxy.empty() && http_proxy != "NULL") {
-            ffi::set_builder_option(builder, KernelUtils::ToDeltaString("http_proxy"), KernelUtils::ToDeltaString(http_proxy)); //untested
-        }
-        if (!proxy_user_name.empty() && proxy_user_name != "NULL") {
-            ffi::set_builder_option(builder, KernelUtils::ToDeltaString("proxy_user_name"), KernelUtils::ToDeltaString(proxy_user_name)); //untested
-        }
-        if (!proxy_password.empty() && proxy_password != "NULL") {
-            ffi::set_builder_option(builder, KernelUtils::ToDeltaString("proxy_password"), KernelUtils::ToDeltaString(proxy_password)); //untested
-        }
-        ffi::set_builder_option(builder, KernelUtils::ToDeltaString("container_name"), KernelUtils::ToDeltaString(bucket)); // needed ?
-
+        ffi::set_builder_option(builder, KernelUtils::ToDeltaString("container_name"), KernelUtils::ToDeltaString(bucket));
     }
     return builder;
 }

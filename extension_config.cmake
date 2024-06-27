@@ -11,7 +11,9 @@ duckdb_extension_load(httpfs)
 
 # Build the azure extension to test with azure
 duckdb_extension_load(azure
-    SOURCE_DIR ${CMAKE_CURRENT_LIST_DIR}/duckdb_azure
+        LOAD_TESTS
+        GIT_URL https://github.com/duckdb/duckdb_azure
+        GIT_TAG 49b63dc8cd166952a0a34dfd54e6cfe5b823e05e
 )
 
 # Build the tpch and tpcds extension for testing/benchmarking

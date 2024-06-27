@@ -6,6 +6,3 @@
 	path = extension-ci-tools
 	url = git@github.com:duckdb/extension-ci-tools.git
 	branch = main
-[submodule "duckdb_azure"]
-	path = duckdb_azure
-	url = https://github.com/duckdb/duckdb_azure.git
