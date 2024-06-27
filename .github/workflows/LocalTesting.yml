@@ -49,14 +49,9 @@ jobs:
 
     - name: Handle OpenSSL dependency for rust build
       run: |
-        echo "OPENSSL_ROOT_DIR=`pwd`/build/release/vcpkg_installed/${{ matrix.vcpkg_triplet }}" >> $GITHUB_ENV
-        echo "OPENSSL_DIR=`pwd`/build/release/vcpkg_installed/${{ matrix.vcpkg_triplet }}" >> $GITHUB_ENV
+        echo "OPENSSL_ROOT_DIR=`pwd`/build/release/vcpkg_installed/x64-linux" >> $GITHUB_ENV
+        echo "OPENSSL_DIR=`pwd`/build/release/vcpkg_installed/x64-linux" >> $GITHUB_ENV
         echo "OPENSSL_USE_STATIC_LIBS=true" >> $GITHUB_ENV
-
-    - name: Set Openssl dir
-      if: inputs.openssl_path != ''
-      shell: bash
-      run: |
 
     # Build extension
     - name: Build extension
