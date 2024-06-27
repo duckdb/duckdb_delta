@@ -45,7 +45,7 @@ string url_decode(string input) {
     return result;
 }
 
-static void visit_callback(ffi::NullableCvoid engine_context, struct ffi::KernelStringSlice path, int64_t size, const ffi::Stats *, const ffi::DvInfo *dv_info, const struct ffi::CStringMap *partition_values) {
+static void visit_callback(ffi::NullableCvoid engine_context, struct ffi::KernelStringSlice path, int64_t size, const ffi::Stats * stats, const ffi::DvInfo *dv_info, const struct ffi::CStringMap *partition_values) {
     auto context = (DeltaSnapshot *) engine_context;
     auto path_string =  context->GetPath();
     StringUtil::RTrim(path_string, "/");
@@ -62,6 +62,7 @@ static void visit_callback(ffi::NullableCvoid engine_context, struct ffi::Kernel
     // Initialize the file metadata
     context->metadata.back()->delta_snapshot_version = context->version;
     context->metadata.back()->file_number = context->resolved_files.size() - 1;
+    context->metadata.back()->cardinality = stats->num_records;
 
     // Fetch the deletion vector
     auto selection_vector_res = ffi::selection_vector_from_dv(dv_info, context->extern_engine.get(), context->global_state.get());
@@ -483,6 +484,22 @@ idx_t DeltaSnapshot::GetTotalFileCount() {
         i++;
     }
     return resolved_files.size();
+}
+
+unique_ptr<NodeStatistics> DeltaSnapshot::GetCardinality(ClientContext &context) {
+    // This also ensures all files are expanded
+    auto total_file_count = DeltaSnapshot::GetTotalFileCount();
+
+    if (total_file_count == 0) {
+        return make_uniq<NodeStatistics>(0,0);
+    }
+
+    idx_t total_tuple_count = 0;
+    for (auto &metadatum : metadata) {
+        total_tuple_count += metadatum->cardinality;
+    }
+
+    return make_uniq<NodeStatistics>(total_tuple_count,total_tuple_count);
 }
 
 unique_ptr<MultiFileReader> DeltaMultiFileReader::CreateInstance() {

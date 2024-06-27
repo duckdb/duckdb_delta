@@ -17,3 +17,8 @@ e	5	5.5
 a	1	1.1
 b	2	2.2
 c	3	3.3
+
+query II
+EXPLAIN FROM delta_scan('${DELTA_KERNEL_TESTS_PATH}/basic_partitioned')
+----
+physical_plan	<REGEX>:.*EC: 6 .*

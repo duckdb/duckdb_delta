@@ -20,6 +20,12 @@ FROM delta_scan('${DAT_PATH}/out/reader_tests/generated/basic_append/delta')
 ----
 5
 
+# Cardinality estimation should correctly show this
+query II
+EXPLAIN FROM delta_scan('${DAT_PATH}/out/reader_tests/generated/basic_append/delta')
+----
+physical_plan	<REGEX>:.*EC: 5 .*
+
 query I
 SELECT count(number)
 FROM delta_scan('${DAT_PATH}/out/reader_tests/generated/basic_append/delta')
@@ -78,3 +84,16 @@ SELECT a_float, number, letter
 FROM delta_scan('${DAT_PATH}/out/reader_tests/generated/basic_append/delta')
 WHERE number > 6
 ----
+
+# Filters are reflected in cardinality estimation: filtering out all files shows 0 EC
+query II
+EXPLAIN FROM delta_scan('${DAT_PATH}/out/reader_tests/generated/basic_append/delta')
+WHERE number > 6
+----
+physical_plan	<REGEX>:.*EC: 0 .*
+
+query II
+EXPLAIN FROM delta_scan('${DAT_PATH}/out/reader_tests/generated/basic_append/delta')
+WHERE number > 4
+----
+physical_plan	<REGEX>:.*EC: 1 .*
