@@ -25,11 +25,32 @@ static void* allocate_string(const struct ffi::KernelStringSlice slice) {
     return new string(slice.ptr, slice.len);
 }
 
-static void visit_callback(ffi::NullableCvoid engine_context, struct ffi::KernelStringSlice path, int64_t size, const ffi::DvInfo *dv_info, const struct ffi::CStringMap *partition_values) {
+string url_decode(string input) {
+    string result;
+    result.reserve(input.size());
+    char ch;
+    replace(input.begin(), input.end(), '+', ' ');
+    for (idx_t i = 0; i < input.length(); i++) {
+        if (int(input[i]) == 37) {
+            unsigned int ii;
+            sscanf(input.substr(i + 1, 2).c_str(), "%x", &ii);
+            ch = static_cast<char>(ii);
+            result += ch;
+            i += 2;
+        } else {
+            result += input[i];
+        }
+    }
+    return result;
+}
+
+static void visit_callback(ffi::NullableCvoid engine_context, struct ffi::KernelStringSlice path, int64_t size, const ffi::Stats *, const ffi::DvInfo *dv_info, const struct ffi::CStringMap *partition_values) {
     auto context = (DeltaSnapshot *) engine_context;
     auto path_string =  context->GetPath();
     StringUtil::RTrim(path_string, "/");
     path_string += "/" + KernelUtils::FromDeltaString(path);
+
+    path_string = url_decode(path_string);
 
     // First we append the file to our resolved files
     context->resolved_files.push_back(DeltaSnapshot::ToDuckDBPath(path_string));
