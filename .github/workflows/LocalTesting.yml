@@ -36,13 +36,16 @@ jobs:
       run: |
         ./duckdb/scripts/setup_manylinux2014.sh general aws-cli ccache ssh openssl python_alias
 
+    - name: Setup Rust for manylinux (dtolnay/rust-toolchain doesn't work due to curl being old here)
+      if: ${{ matrix.duckdb_arch == 'linux_amd64_gcc4' }}
+      run: |
+        curl --proto '=https' --tlsv1.2 -sSf https://sh.rustup.rs | sh -s -- -y
+        echo "$HOME/.cargo/bin" >> $GITHUB_PATH
+
     - name: Setup vcpkg
       uses: lukka/run-vcpkg@v11.1
       with:
         vcpkgGitCommitId: a1a1cbc975abf909a6c8985a6a2b8fe20bbd9bd6
-
-    - name: Setup Rust
-      uses: dtolnay/rust-toolchain@stable
 
     # Build extension
     - name: Build extension
@@ -67,3 +70,43 @@ jobs:
       run: |
         echo "## azurite"
         cat azurite_log.txt
+
+  generated-tests-linux:
+    name: Generated Tests (Linux)
+    runs-on: ubuntu-latest
+    env:
+      GEN: ninja
+      VCPKG_TOOLCHAIN_PATH: ${{ github.workspace }}/vcpkg/scripts/buildsystems/vcpkg.cmake
+
+    steps:
+      - uses: actions/checkout@v3
+        with:
+          fetch-depth: 0
+          submodules: 'true'
+
+      - name: Install
+        shell: bash
+        run: sudo apt-get update -y -qq && sudo apt-get install -y -qq ninja-build
+
+      - name: Setup Ccache
+        uses: hendrikmuhs/ccache-action@main
+        with:
+          key: ${{ github.job }}
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+
+      - name: Setup vcpkg
+        uses: lukka/run-vcpkg@v11.1
+        with:
+          vcpkgGitCommitId: a1a1cbc975abf909a6c8985a6a2b8fe20bbd9bd6
+
+      - name: Build
+        shell: bash
+        run: make generate-data
+
+      - name: Test
+        shell: bash
+        run: |
+          GENERATED_DATA_AVAILABLE=1 make test
