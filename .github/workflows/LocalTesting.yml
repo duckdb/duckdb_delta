@@ -41,6 +41,9 @@ jobs:
       with:
         vcpkgGitCommitId: a1a1cbc975abf909a6c8985a6a2b8fe20bbd9bd6
 
+    - name: Setup Rust
+      uses: dtolnay/rust-toolchain@stable
+
     # Build extension
     - name: Build extension
       env:
