@@ -28,7 +28,7 @@ enum class KernelError {
   ObjectStorePathError,
 #endif
 #if defined(DEFINE_DEFAULT_ENGINE)
-  Reqwest,
+  ReqwestError,
 #endif
   FileNotFoundError,
   MissingColumnError,
@@ -45,10 +45,10 @@ enum class KernelError {
   JoinFailureError,
   Utf8Error,
   ParseIntError,
-  InvalidColumnMappingMode,
-  InvalidTableLocation,
+  InvalidColumnMappingModeError,
+  InvalidTableLocationError,
   InvalidDecimalError,
-  InvalidStructData,
+  InvalidStructDataError,
 };
 
 #if defined(DEFINE_DEFAULT_ENGINE)
@@ -304,9 +304,19 @@ using NullableCvoid = void*;
 /// function is that `kernel_str` is _only_ valid until the return from this function
 using AllocateStringFn = NullableCvoid(*)(KernelStringSlice kernel_str);
 
+/// Give engines an easy way to consume stats
+struct Stats {
+  /// For any file where the deletion vector is not present (see [`DvInfo::has_vector`]), the
+  /// `num_records` statistic must be present and accurate, and must equal the number of records
+  /// in the data file. In the presence of Deletion Vectors the statistics may be somewhat
+  /// outdated, i.e. not reflecting deleted rows yet.
+  uint64_t num_records;
+};
+
 using CScanCallback = void(*)(NullableCvoid engine_context,
                               KernelStringSlice path,
                               int64_t size,
+                              const Stats *stats,
                               const DvInfo *dv_info,
                               const CStringMap *partition_map);
 
@@ -323,7 +333,6 @@ struct im_an_unused_struct_that_tricks_msvc_into_compilation {
     ExternResult<Handle<SharedScan>> field9;
     ExternResult<Handle<SharedScan>> field10;
 };
-
 
 extern "C" {
 

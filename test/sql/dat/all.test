@@ -54,12 +54,6 @@ SELECT *
 FROM parquet_scan('${DAT_PATH}/out/reader_tests/generated/with_schema_change/expected/latest/**/*.parquet')
 ----
 
-
-### FAILING DAT TESTS
-
-# TODO fix all of these
-mode skip
-
 # basic_partitioned
 query I rowsort basic_partitioned
 SELECT *
@@ -78,20 +72,12 @@ FROM delta_scan('${DAT_PATH}/out/reader_tests/generated/multi_partitioned/delta'
 ----
 
 query I rowsort multi_partitioned
-SELECT *
+SELECT letter, date, decode(data) as data, number
 FROM parquet_scan('${DAT_PATH}/out/reader_tests/generated/multi_partitioned/expected/latest/**/*.parquet')
 ----
 
-# multi_partitioned
-query I rowsort multi_partitioned
-SELECT *
-FROM delta_scan('${DAT_PATH}/out/reader_tests/generated/multi_partitioned/delta')
-----
-
-query I rowsort multi_partitioned
-SELECT *
-FROM parquet_scan('${DAT_PATH}/out/reader_tests/generated/multi_partitioned/expected/latest/**/*.parquet')
-----
+# TODO: fix this
+require notwindows
 
 # multi_partitioned_2
 query I rowsort multi_partitioned_2
@@ -103,6 +89,11 @@ query I rowsort multi_partitioned_2
 SELECT *
 FROM parquet_scan('${DAT_PATH}/out/reader_tests/generated/multi_partitioned_2/expected/latest/**/*.parquet')
 ----
+
+### FAILING DAT TESTS
+
+# TODO fix all of these
+mode skip
 
 # no_replay
 query I rowsort no_replay

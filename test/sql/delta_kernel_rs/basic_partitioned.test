@@ -8,10 +8,12 @@ require delta
 
 require-env DELTA_KERNEL_TESTS_PATH
 
-# FIXME: this fails due some weird error
-mode skip
-
-statement error
+query III
 SELECT * FROM delta_scan('${DELTA_KERNEL_TESTS_PATH}/basic_partitioned')
 ----
-Failed to read file "/Users/sam/Development/delta-kernel-testing/delta-kernel-rs/kernel/tests/data/basic_partitioned/letter=__HIVE_DEFAULT_PARTITION__
+NULL	6	6.6
+a	4	4.4
+e	5	5.5
+a	1	1.1
+b	2	2.2
+c	3	3.3
