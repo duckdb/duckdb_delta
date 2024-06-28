@@ -14,7 +14,7 @@ copy_file() {
   az storage blob upload --file "${from}" --name "${to}" --container-name "delta-testing-public"  --connection-string "${conn_string}"
 }
 
-cd ./build/debug/rust/src/delta_kernel/acceptance/tests/dat/out/reader_tests/generated
+cd ./build/release/rust/src/delta_kernel/acceptance/tests/dat/out/reader_tests/generated &&
 while read filepath; do
     remote_filepath=dat/"$(echo "${filepath}" | cut -c 3-)"
     copy_file "${filepath}" "${remote_filepath}"
