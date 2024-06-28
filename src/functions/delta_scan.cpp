@@ -18,6 +18,7 @@
 
 #include <string>
 #include <numeric>
+#include <regex>
 
 namespace duckdb {
 
@@ -65,31 +66,86 @@ static void visit_callback(ffi::NullableCvoid engine_context, struct ffi::Kernel
     ffi::visit_scan_data(engine_data, selection_vec, engine_context, visit_callback);
 }
 
+string ParseAccountNameFromEndpoint(const string& endpoint) {
+    if (!StringUtil::StartsWith(endpoint, "https://")) {
+        return "";
+    }
+    auto result = endpoint.find('.', 8);
+    if (result == endpoint.npos) {
+        return "";
+    }
+    return endpoint.substr(8,result-8);
+}
+
+string parseFromConnectionString(const string& connectionString, const string& key) {
+    std::regex pattern(key + "=([^;]+)(?=;|$)");
+    std::smatch matches;
+    if (std::regex_search(connectionString, matches, pattern) && matches.size() > 1) {
+        // The second match ([1]) contains the access key
+        return matches[1].str();
+    }
+    return "";
+}
+
 static ffi::EngineBuilder* CreateBuilder(ClientContext &context, const string &path) {
     ffi::EngineBuilder* builder;
 
     // For "regular" paths we early out with the default builder config
-    if (!StringUtil::StartsWith(path, "s3://")) {
+    if (!StringUtil::StartsWith(path, "s3://") && !StringUtil::StartsWith(path, "azure://") && !StringUtil::StartsWith(path, "az://") && !StringUtil::StartsWith(path, "abfs://") && !StringUtil::StartsWith(path, "abfss://")) {
         auto interface_builder_res = ffi::get_engine_builder(KernelUtils::ToDeltaString(path), DuckDBEngineError::AllocateError);
         return KernelUtils::UnpackResult(interface_builder_res, "get_engine_interface_builder for path " + path);
     }
 
-    auto end_of_container = path.find('/',5);
+    string bucket;
+    string path_in_bucket;
+    string secret_type;
 
-    if(end_of_container == string::npos) {
-        throw IOException("Invalid s3 url passed to delta scan: %s", path);
+    if (StringUtil::StartsWith(path, "s3://")) {
+        auto end_of_container = path.find('/',5);
+
+        if(end_of_container == string::npos) {
+            throw IOException("Invalid s3 url passed to delta scan: %s", path);
+        }
+        bucket = path.substr(5, end_of_container-5);
+        path_in_bucket = path.substr(end_of_container);
+        secret_type = "s3";
+    } else if ((StringUtil::StartsWith(path, "azure://")) || (StringUtil::StartsWith(path, "abfss://"))) {
+        auto end_of_container = path.find('/',8);
+
+        if(end_of_container == string::npos) {
+            throw IOException("Invalid azure url passed to delta scan: %s", path);
+        }
+        bucket = path.substr(8, end_of_container-8);
+        path_in_bucket = path.substr(end_of_container);
+        secret_type = "azure";
+    } else if (StringUtil::StartsWith(path, "az://")) {
+        auto end_of_container = path.find('/',5);
+
+        if(end_of_container == string::npos) {
+            throw IOException("Invalid azure url passed to delta scan: %s", path);
+        }
+        bucket = path.substr(5, end_of_container-5);
+        path_in_bucket = path.substr(end_of_container);
+        secret_type = "azure";
+    } else if (StringUtil::StartsWith(path, "abfs://")) {
+        auto end_of_container = path.find('/',7);
+
+        if(end_of_container == string::npos) {
+            throw IOException("Invalid azure url passed to delta scan: %s", path);
+        }
+        bucket = path.substr(8, end_of_container-8);
+        path_in_bucket = path.substr(end_of_container);
+        secret_type = "azure";
     }
-    auto bucket = path.substr(5, end_of_container-5);
-    auto path_in_bucket = path.substr(end_of_container);
 
     auto interface_builder_res = ffi::get_engine_builder(KernelUtils::ToDeltaString(path), DuckDBEngineError::AllocateError);
     builder = KernelUtils::UnpackResult(interface_builder_res, "get_engine_interface_builder for path " + path);
 
-    // For S3 paths we need to trim the url, set the container, and fetch a potential secret
+    // For S3 or Azure paths we need to trim the url, set the container, and fetch a potential secret
     auto &secret_manager = SecretManager::Get(context);
     auto transaction = CatalogTransaction::GetSystemCatalogTransaction(context);
 
-    auto secret_match = secret_manager.LookupSecret(transaction, path, "s3");
+    auto secret_match = secret_manager.LookupSecret(transaction, path, secret_type);
 
     // No secret: nothing left to do here!
     if (!secret_match.HasMatch()) {
@@ -97,26 +153,98 @@ static ffi::EngineBuilder* CreateBuilder(ClientContext &context, const string &p
     }
     const auto &kv_secret = dynamic_cast<const KeyValueSecret &>(*secret_match.secret_entry->secret);
 
-    auto key_id = kv_secret.TryGetValue("key_id").ToString();
-    auto secret = kv_secret.TryGetValue("secret").ToString();
-    auto session_token = kv_secret.TryGetValue("session_token").ToString();
-    auto region = kv_secret.TryGetValue("region").ToString();
 
-    if (key_id.empty() && secret.empty()) {
-        ffi::set_builder_option(builder, KernelUtils::ToDeltaString("skip_signature"), KernelUtils::ToDeltaString("true"));
-    }
+    // Here you would need to add the logic for setting the builder options for Azure
+    // This is just a placeholder and will need to be replaced with the actual logic
+    if (secret_type == "s3") {
+        auto key_id = kv_secret.TryGetValue("key_id").ToString();
+        auto secret = kv_secret.TryGetValue("secret").ToString();
+        auto session_token = kv_secret.TryGetValue("session_token").ToString();
+        auto region = kv_secret.TryGetValue("region").ToString();
 
-    if (!key_id.empty()) {
-        ffi::set_builder_option(builder, KernelUtils::ToDeltaString("aws_access_key_id"), KernelUtils::ToDeltaString(key_id));
-    }
-    if (!secret.empty()) {
-        ffi::set_builder_option(builder, KernelUtils::ToDeltaString("aws_secret_access_key"), KernelUtils::ToDeltaString(secret));
-    }
-    if (!session_token.empty()) {
-        ffi::set_builder_option(builder, KernelUtils::ToDeltaString("aws_session_token"), KernelUtils::ToDeltaString(session_token));
-    }
-    ffi::set_builder_option(builder, KernelUtils::ToDeltaString("aws_region"), KernelUtils::ToDeltaString(region));
+        if (key_id.empty() && secret.empty()) {
+            ffi::set_builder_option(builder, KernelUtils::ToDeltaString("skip_signature"), KernelUtils::ToDeltaString("true"));
+        }
 
+        if (!key_id.empty()) {
+            ffi::set_builder_option(builder, KernelUtils::ToDeltaString("aws_access_key_id"), KernelUtils::ToDeltaString(key_id));
+        }
+        if (!secret.empty()) {
+            ffi::set_builder_option(builder, KernelUtils::ToDeltaString("aws_secret_access_key"), KernelUtils::ToDeltaString(secret));
+        }
+        if (!session_token.empty()) {
+            ffi::set_builder_option(builder, KernelUtils::ToDeltaString("aws_session_token"), KernelUtils::ToDeltaString(session_token));
+        }
+        ffi::set_builder_option(builder, KernelUtils::ToDeltaString("aws_region"), KernelUtils::ToDeltaString(region));
+
+    } else if (secret_type == "azure") {
+        // azure seems to be super complicated as we need to cover duckdb azure plugin and delta RS builder
+        // and both require different settings
+        auto connection_string = kv_secret.TryGetValue("connection_string").ToString();
+        auto account_name = kv_secret.TryGetValue("account_name").ToString();
+        auto endpoint = kv_secret.TryGetValue("endpoint").ToString();
+        auto client_id = kv_secret.TryGetValue("client_id").ToString();
+        auto client_secret = kv_secret.TryGetValue("client_secret").ToString();
+        auto tenant_id = kv_secret.TryGetValue("tenant_id").ToString();
+        auto chain = kv_secret.TryGetValue("chain").ToString();
+        auto provider = kv_secret.GetProvider();
+
+        if (provider == "credential_chain") {
+            // Authentication option 1a: using the cli authentication
+            if (chain.find("cli") != std::string::npos) {
+                ffi::set_builder_option(builder, KernelUtils::ToDeltaString("use_azure_cli"), KernelUtils::ToDeltaString("true"));
+            }
+            // Authentication option 1b: non-cli credential chains will just "hope for the best" technically since we are using the default
+            // credential chain provider duckDB and delta-kernel-rs should find the same auth
+        } else if (!connection_string.empty() && connection_string != "NULL") {
+
+            // Authentication option 2: a connection string based on account key
+            auto account_key = parseFromConnectionString(connection_string, "AccountKey");
+            account_name = parseFromConnectionString(connection_string, "AccountName");
+            // Authentication option 2: a connection string based on account key
+            if (!account_name.empty() && !account_key.empty()) {
+                ffi::set_builder_option(builder, KernelUtils::ToDeltaString("account_key"),
+                                        KernelUtils::ToDeltaString(account_key));
+            } else {
+                // Authentication option 2b: a connection string based on SAS token
+                endpoint = parseFromConnectionString(connection_string, "BlobEndpoint");
+                if (account_name.empty()) {
+                    account_name = ParseAccountNameFromEndpoint(endpoint);
+                }
+                auto sas_token = parseFromConnectionString(connection_string, "SharedAccessSignature");
+                if (!sas_token.empty()) {
+                    ffi::set_builder_option(builder, KernelUtils::ToDeltaString("sas_token"),
+                                            KernelUtils::ToDeltaString(sas_token));
+                }
+            }
+        } else if (provider == "service_principal") {
+            if (!client_id.empty() && client_id != "NULL") {
+                ffi::set_builder_option(builder, KernelUtils::ToDeltaString("azure_client_id"), KernelUtils::ToDeltaString(client_id));
+            }
+            if (!client_secret.empty() && client_secret != "NULL") {
+                ffi::set_builder_option(builder, KernelUtils::ToDeltaString("azure_client_secret"), KernelUtils::ToDeltaString(client_secret));
+            }
+            if (!tenant_id.empty() && tenant_id != "NULL") {
+                ffi::set_builder_option(builder, KernelUtils::ToDeltaString("azure_tenant_id"), KernelUtils::ToDeltaString(tenant_id));
+            }
+        } else {
+            // Authentication option 3: no authentication, just an account name
+            ffi::set_builder_option(builder, KernelUtils::ToDeltaString("azure_skip_signature"), KernelUtils::ToDeltaString("true"));
+        }
+        // Set the use_emulator option for when the azurite test server is used
+        if (account_name == "devstoreaccount1" || connection_string.find("devstoreaccount1") != string::npos) {
+            ffi::set_builder_option(builder, KernelUtils::ToDeltaString("use_emulator"), KernelUtils::ToDeltaString("true"));
+        }
+        if (!account_name.empty() && account_name != "NULL") {
+            ffi::set_builder_option(builder, KernelUtils::ToDeltaString("account_name"), KernelUtils::ToDeltaString(account_name)); //needed for delta RS builder
+        }
+        if (!endpoint.empty() && endpoint != "NULL") {
+            ffi::set_builder_option(builder, KernelUtils::ToDeltaString("azure_endpoint"), KernelUtils::ToDeltaString(endpoint));
+        } else {
+            ffi::set_builder_option(builder, KernelUtils::ToDeltaString("azure_endpoint"), KernelUtils::ToDeltaString("https://" + account_name + ".blob.core.windows.net/"));
+        }
+        ffi::set_builder_option(builder, KernelUtils::ToDeltaString("container_name"), KernelUtils::ToDeltaString(bucket));
+    }
     return builder;
 }
 

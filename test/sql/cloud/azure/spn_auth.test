@@ -1,0 +1,38 @@
+# name: test/sql/cloud/spn_auth.test
+# description: test azure extension with service principal authentication
+# group: [azure]
+
+require azure
+
+require parquet
+
+require delta
+
+require-env AZURE_CLIENT_ID
+
+require-env AZURE_CLIENT_SECRET
+
+require-env AZURE_TENANT_ID
+
+require-env AZURE_STORAGE_ACCOUNT
+
+statement ok
+CREATE SECRET spn (
+    TYPE AZURE,
+    PROVIDER SERVICE_PRINCIPAL,
+    TENANT_ID '${AZURE_TENANT_ID}',
+    CLIENT_ID '${AZURE_CLIENT_ID}',
+    CLIENT_SECRET '${AZURE_CLIENT_SECRET}',
+    ACCOUNT_NAME '${AZURE_STORAGE_ACCOUNT}'
+);
+
+# Run a remote DAT test
+query I rowsort all_primitive_types
+SELECT *
+FROM delta_scan('azure://delta-testing-private/dat/all_primitive_types/delta')
+----
+
+query I rowsort all_primitive_types
+SELECT *
+FROM parquet_scan('azure://delta-testing-private/dat/all_primitive_types/expected/latest/**/*.parquet')
+----

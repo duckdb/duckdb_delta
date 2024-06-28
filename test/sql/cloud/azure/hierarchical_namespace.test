@@ -1,0 +1,42 @@
+# name: test/sql/hierarchical_namespace.test
+# description: test azure extension with ADLS GEN2 storage
+# group: [azure]
+
+# Require statement will ensure this test is run with this extension loaded
+require azure
+
+require parquet
+
+require delta
+
+require-env AZURE_TENANT_ID
+
+require-env AZURE_CLIENT_ID
+
+require-env AZURE_CLIENT_SECRET
+
+require-env AZURE_STORAGE_ACCOUNT
+
+statement ok
+set allow_persistent_secrets=false
+
+statement ok
+CREATE SECRET spn (
+    TYPE AZURE,
+    PROVIDER SERVICE_PRINCIPAL,
+    TENANT_ID '${AZURE_TENANT_ID}',
+    CLIENT_ID '${AZURE_CLIENT_ID}',
+    CLIENT_SECRET '${AZURE_CLIENT_SECRET}',
+    ACCOUNT_NAME '${AZURE_STORAGE_ACCOUNT}'
+);
+
+# Run a remote DAT test on abfss
+query I
+SELECT int32
+FROM delta_scan('abfss://delta-testing-private/dat/all_primitive_types/delta')
+----
+0
+1
+2
+3
+4
