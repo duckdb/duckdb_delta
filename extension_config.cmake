@@ -16,6 +16,13 @@ duckdb_extension_load(azure
         GIT_TAG 49b63dc8cd166952a0a34dfd54e6cfe5b823e05e
 )
 
+# Build the aws extension to test with credential providers
+duckdb_extension_load(aws
+        LOAD_TESTS
+        GIT_URL https://github.com/duckdb/duckdb_aws
+        GIT_TAG 3d1f5c8d0127ff7aaf127935721b197e5fdd95e5
+)
+
 # Build the tpch and tpcds extension for testing/benchmarking
 duckdb_extension_load(tpch)
 duckdb_extension_load(tpcds)
