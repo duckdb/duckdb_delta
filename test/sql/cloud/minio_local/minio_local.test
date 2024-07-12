@@ -1,0 +1,121 @@
+# name: test/sql/cloud/minio_local/aws_secret_chains_env.test
+# description: test delta extension with a local minio installation
+# group: [aws]
+
+require httpfs
+
+require parquet
+
+require delta
+
+require aws
+
+require-env DUCKDB_MINIO_TEST_SERVER_AVAILABLE
+
+require-env AWS_ACCESS_KEY_ID
+
+require-env AWS_SECRET_ACCESS_KEY
+
+require-env AWS_DEFAULT_REGION
+
+require-env AWS_ENDPOINT
+
+statement ok
+set secret_directory='__TEST_DIR__/aws_secret_chains_env'
+
+# Secret with just the endpoint
+statement ok
+CREATE SECRET s1 (
+    TYPE S3,
+    ENDPOINT '${AWS_ENDPOINT}',
+	USE_SSL false
+);
+
+# We need auth for this
+statement error
+SELECT int32
+FROM delta_scan('s3://test-bucket/dat/all_primitive_types/delta')
+----
+IO Error
+
+# unauthenticated query is fine!
+query I
+SELECT int32
+FROM delta_scan('s3://test-bucket-public/dat/all_primitive_types/delta')
+----
+0
+1
+2
+3
+4
+
+statement ok
+DROP SECRET S1;
+
+# Now we create a config secret with credentials
+statement ok
+CREATE SECRET s1 (
+    TYPE S3,
+    PROVIDER config,
+    KEY_ID '${AWS_ACCESS_KEY_ID}',
+    SECRET '${AWS_SECRET_ACCESS_KEY}',
+    REGION '${AWS_DEFAULT_REGION}',
+    ENDPOINT '${AWS_ENDPOINT}',
+    USE_SSL false
+);
+
+# Public bucket now does work
+query I
+SELECT int32
+FROM delta_scan('s3://test-bucket-public/dat/all_primitive_types/delta')
+----
+0
+1
+2
+3
+4
+
+# Private bucket now does work too
+query I
+SELECT int32
+FROM delta_scan('s3://test-bucket/dat/all_primitive_types/delta')
+----
+0
+1
+2
+3
+4
+
+statement ok
+DROP SECRET S1;
+
+# Now we create a credential chain secret that searches the env vars automatically
+statement ok
+CREATE SECRET s1 (
+    TYPE S3,
+    PROVIDER credential_chain,
+    ENDPOINT '${AWS_ENDPOINT}',
+    USE_SSL false
+);
+
+# Still works!
+query I
+SELECT int32
+FROM delta_scan('s3://test-bucket-public/dat/all_primitive_types/delta')
+----
+0
+1
+2
+3
+4
+
+# Still works!
+query I
+SELECT int32
+FROM delta_scan('s3://test-bucket/dat/all_primitive_types/delta')
+----
+0
+1
+2
+3
+4

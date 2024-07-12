@@ -3,6 +3,11 @@
     "azure-identity-cpp",
     "azure-storage-blobs-cpp",
     "azure-storage-files-datalake-cpp",
-    "openssl"
+    "openssl",
+    "zlib",
+    {
+      "name": "aws-sdk-cpp",
+      "features": [ "sts" ]
+    }
   ]
 }
