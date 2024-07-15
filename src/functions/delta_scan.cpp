@@ -557,6 +557,9 @@ void DeltaMultiFileReader::FinalizeBind(const MultiFileReaderOptions &file_optio
     if (!file_metadata->partition_map.empty()) {
         for (idx_t i = 0; i < global_column_ids.size(); i++) {
             column_t col_id = global_column_ids[i];
+            if (IsRowIdColumnId(col_id)) {
+                continue;
+            }
             auto col_partition_entry = file_metadata->partition_map.find(global_names[col_id]);
             if (col_partition_entry != file_metadata->partition_map.end()) {
                 // Todo: use https://github.com/delta-io/delta/blob/master/PROTOCOL.md#partition-value-serialization
