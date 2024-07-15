@@ -26,7 +26,6 @@ query I rowsort nested_types
 SELECT *
 FROM delta_scan('${DAT_PATH}/out/reader_tests/generated/nested_types/delta')
 ----
-
 query I rowsort nested_types
 SELECT *
 FROM parquet_scan('${DAT_PATH}/out/reader_tests/generated/nested_types/expected/latest/**/*.parquet')
@@ -43,6 +42,16 @@ SELECT *
 FROM parquet_scan('${DAT_PATH}/out/reader_tests/generated/basic_append/expected/latest/**/*.parquet')
 ----
 
+query I rowsort basic_append_count
+SELECT count(*)
+FROM delta_scan('${DAT_PATH}/out/reader_tests/generated/basic_append/delta')
+----
+
+query I rowsort basic_append_count
+SELECT count(*)
+FROM parquet_scan('${DAT_PATH}/out/reader_tests/generated/basic_append/expected/latest/**/*.parquet')
+----
+
 # with_schema_change
 query I rowsort with_checkpoint
 SELECT *
@@ -51,6 +60,16 @@ FROM delta_scan('${DAT_PATH}/out/reader_tests/generated/with_schema_change/delta
 
 query I rowsort with_checkpoint
 SELECT *
+FROM parquet_scan('${DAT_PATH}/out/reader_tests/generated/with_schema_change/expected/latest/**/*.parquet')
+----
+
+query I rowsort with_checkpoint_count
+SELECT count(*)
+FROM delta_scan('${DAT_PATH}/out/reader_tests/generated/with_schema_change/delta')
+----
+
+query I rowsort with_checkpoint_count
+SELECT count(*)
 FROM parquet_scan('${DAT_PATH}/out/reader_tests/generated/with_schema_change/expected/latest/**/*.parquet')
 ----
 
@@ -65,6 +84,16 @@ SELECT *
 FROM parquet_scan('${DAT_PATH}/out/reader_tests/generated/basic_partitioned/expected/latest/**/*.parquet')
 ----
 
+query I rowsort basic_partitioned_count
+SELECT count(*)
+FROM delta_scan('${DAT_PATH}/out/reader_tests/generated/basic_partitioned/delta')
+----
+
+query I rowsort basic_partitioned_count
+SELECT count(*)
+FROM parquet_scan('${DAT_PATH}/out/reader_tests/generated/basic_partitioned/expected/latest/**/*.parquet')
+----
+
 # multi_partitioned
 query I rowsort multi_partitioned
 SELECT *
@@ -73,6 +102,16 @@ FROM delta_scan('${DAT_PATH}/out/reader_tests/generated/multi_partitioned/delta'
 
 query I rowsort multi_partitioned
 SELECT letter, date, decode(data) as data, number
+FROM parquet_scan('${DAT_PATH}/out/reader_tests/generated/multi_partitioned/expected/latest/**/*.parquet')
+----
+
+query I rowsort multi_partitioned_count
+SELECT count(*)
+FROM delta_scan('${DAT_PATH}/out/reader_tests/generated/multi_partitioned/delta')
+----
+
+query I rowsort multi_partitioned_count
+SELECT count(*)
 FROM parquet_scan('${DAT_PATH}/out/reader_tests/generated/multi_partitioned/expected/latest/**/*.parquet')
 ----
 
