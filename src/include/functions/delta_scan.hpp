@@ -43,7 +43,7 @@ struct DeltaSnapshot : public MultiFileList {
 public:
     void Bind(vector<LogicalType> &return_types, vector<string> &names);
     unique_ptr<MultiFileList> ComplexFilterPushdown(ClientContext &context,
-                                                            const MultiFileReaderOptions &options, LogicalGet &get,
+                                                            const MultiFileReaderOptions &options, MultiFilePushdownInfo &info,
                                                             vector<unique_ptr<Expression>> &filters) override;
     vector<string> GetAllFiles() override;
     FileExpandResult GetExpandResult() override;
