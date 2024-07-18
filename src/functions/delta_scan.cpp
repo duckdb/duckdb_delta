@@ -438,13 +438,13 @@ void DeltaSnapshot::InitializeFiles() {
     initialized = true;
 }
 
-unique_ptr<MultiFileList> DeltaSnapshot::ComplexFilterPushdown(ClientContext &context, const MultiFileReaderOptions &options, LogicalGet &get,
+unique_ptr<MultiFileList> DeltaSnapshot::ComplexFilterPushdown(ClientContext &context, const MultiFileReaderOptions &options, MultiFilePushdownInfo &info,
                                                vector<unique_ptr<Expression>> &filters) {
     FilterCombiner combiner(context);
     for (const auto &filter : filters) {
         combiner.AddFilter(filter->Copy());
     }
-    auto filterstmp = combiner.GenerateTableScanFilters(get.column_ids);
+    auto filterstmp = combiner.GenerateTableScanFilters(info.column_ids);
 
     // TODO: can/should we figure out if this filtered anything?
     auto filtered_list = make_uniq<DeltaSnapshot>(context, paths[0]);
