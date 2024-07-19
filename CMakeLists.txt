@@ -99,7 +99,7 @@ ExternalProject_Add(
         GIT_REPOSITORY "https://github.com/delta-incubator/delta-kernel-rs"
         # WARNING: the FFI headers are currently pinned due to the C linkage issue of the c++ headers. Currently, when bumping
         # the kernel version, the produced header in ./src/include/delta_kernel_ffi.hpp should be also bumped, applying the fix
-        GIT_TAG ed2b80b127984481adba8e59879f39b9e5f871d1
+        GIT_TAG 94cc6faf26b1e6eebb81cf7e721c3cc28783beaf
         # Prints the env variables passed to the cargo build to the terminal, useful in debugging because passing them
         # through CMake is an error-prone mess
         CONFIGURE_COMMAND ${CMAKE_COMMAND} -E env ${RUST_UNSET_ENV_VARS} ${RUST_ENV_VARS} env

@@ -83,7 +83,7 @@ static void visit_callback(ffi::NullableCvoid engine_context, struct ffi::Kernel
     context->metadata.back()->partition_map = std::move(constant_map);
 }
 
-  static void visit_data(void *engine_context, ffi::EngineData* engine_data, const struct ffi::KernelBoolSlice selection_vec) {
+  static void visit_data(void *engine_context, ffi::ExclusiveEngineData* engine_data, const struct ffi::KernelBoolSlice selection_vec) {
     ffi::visit_scan_data(engine_data, selection_vec, engine_context, visit_callback);
 }
 
