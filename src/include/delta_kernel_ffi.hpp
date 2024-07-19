@@ -393,7 +393,7 @@ struct im_an_unused_struct_that_tricks_msvc_into_compilation {
     ExternResult<ArrowFFIData*> field7;
     ExternResult<Handle<SharedScanDataIterator>> field8;
     ExternResult<Handle<SharedScan>> field9;
-    ExternResult<Handle<SharedScan>> field10;
+    ExternResult<Handle<ExclusiveFileReadResultIterator>> field10;
 };
 
 extern "C" {
