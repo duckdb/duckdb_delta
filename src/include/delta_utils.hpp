@@ -102,11 +102,11 @@ struct TemplatedUniqueKernelPointer : public UniqueKernelPointer<KernelType> {
     };
 };
 
-typedef TemplatedUniqueKernelPointer<ffi::SharedSnapshot, ffi::drop_snapshot> KernelSnapshot;
-typedef TemplatedUniqueKernelPointer<ffi::SharedExternEngine, ffi::drop_engine> KernelExternEngine;
-typedef TemplatedUniqueKernelPointer<ffi::SharedScan, ffi::drop_scan> KernelScan;
-typedef TemplatedUniqueKernelPointer<ffi::SharedGlobalScanState, ffi::drop_global_scan_state> KernelGlobalScanState;
-typedef TemplatedUniqueKernelPointer<ffi::SharedScanDataIterator, ffi::kernel_scan_data_free> KernelScanDataIterator;
+typedef TemplatedUniqueKernelPointer<ffi::SharedSnapshot, ffi::free_snapshot> KernelSnapshot;
+typedef TemplatedUniqueKernelPointer<ffi::SharedExternEngine, ffi::free_engine> KernelExternEngine;
+typedef TemplatedUniqueKernelPointer<ffi::SharedScan, ffi::free_scan> KernelScan;
+typedef TemplatedUniqueKernelPointer<ffi::SharedGlobalScanState, ffi::free_global_scan_state> KernelGlobalScanState;
+typedef TemplatedUniqueKernelPointer<ffi::SharedScanDataIterator, ffi::free_kernel_scan_data> KernelScanDataIterator;
 
 struct KernelUtils {
     static ffi::KernelStringSlice ToDeltaString(const string &str);

@@ -53,22 +53,22 @@ FROM parquet_scan('${DAT_PATH}/out/reader_tests/generated/basic_append/expected/
 ----
 
 # with_schema_change
-query I rowsort with_checkpoint
+query I rowsort with_schema_change
 SELECT *
 FROM delta_scan('${DAT_PATH}/out/reader_tests/generated/with_schema_change/delta')
 ----
 
-query I rowsort with_checkpoint
+query I rowsort with_schema_change
 SELECT *
 FROM parquet_scan('${DAT_PATH}/out/reader_tests/generated/with_schema_change/expected/latest/**/*.parquet')
 ----
 
-query I rowsort with_checkpoint_count
+query I rowsort with_schema_change_count
 SELECT count(*)
 FROM delta_scan('${DAT_PATH}/out/reader_tests/generated/with_schema_change/delta')
 ----
 
-query I rowsort with_checkpoint_count
+query I rowsort with_schema_change_count
 SELECT count(*)
 FROM parquet_scan('${DAT_PATH}/out/reader_tests/generated/with_schema_change/expected/latest/**/*.parquet')
 ----
@@ -128,11 +128,6 @@ query I rowsort multi_partitioned_2
 SELECT *
 FROM parquet_scan('${DAT_PATH}/out/reader_tests/generated/multi_partitioned_2/expected/latest/**/*.parquet')
 ----
-
-### FAILING DAT TESTS
-
-# TODO fix all of these
-mode skip
 
 # no_replay
 query I rowsort no_replay
