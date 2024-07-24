@@ -1,3 +1,5 @@
+.PHONY: bench-output-dir clean_benchmark plot
+
 # Set this flag during building to enable the benchmark runner
 ifeq (${BUILD_BENCHMARK}, 1)
 	TOOLCHAIN_FLAGS:=${TOOLCHAIN_FLAGS} -DBUILD_BENCHMARKS=1

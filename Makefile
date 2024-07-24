@@ -11,11 +11,11 @@ test_release: export DAT_PATH=./build/release/rust/src/delta_kernel/acceptance/t
 test_debug: export DELTA_KERNEL_TESTS_PATH=./build/debug/rust/src/delta_kernel/kernel/tests/data
 test_debug: export DAT_PATH=./build/debug/rust/src/delta_kernel/acceptance/tests/dat
 
-# Include the Makefile from the benchmark directory
-include benchmark/benchmark.Makefile
-
 # Include the Makefile from extension-ci-tools
 include extension-ci-tools/makefiles/duckdb_extension.Makefile
+
+# Include the Makefile from the benchmark directory
+include benchmark/benchmark.Makefile
 
 # Generate some test data to test with
 generate-data:
