@@ -63,3 +63,4 @@ bench-run-tpcds-sf1: bench-run-tpcds-sf1-delta bench-run-tpcds-sf1-parquet
 ###
 bench-run-all-local: bench-run-tpcds-sf1 bench-run-tpch-sf1
 
+bench-run-all-remote: bench-run-tpch-sf1-remote
