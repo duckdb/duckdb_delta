@@ -5,6 +5,7 @@
 #include "duckdb/planner/filter/conjunction_filter.hpp"
 #include "duckdb/common/enum_util.hpp"
 #include <iostream>
+#include <duckdb/planner/filter/null_filter.hpp>
 
 // TODO: clean up this file as we go
 
@@ -101,11 +102,11 @@ struct TemplatedUniqueKernelPointer : public UniqueKernelPointer<KernelType> {
     };
 };
 
-typedef TemplatedUniqueKernelPointer<ffi::SharedSnapshot, ffi::drop_snapshot> KernelSnapshot;
-typedef TemplatedUniqueKernelPointer<ffi::SharedExternEngine, ffi::drop_engine> KernelExternEngine;
-typedef TemplatedUniqueKernelPointer<ffi::SharedScan, ffi::drop_scan> KernelScan;
-typedef TemplatedUniqueKernelPointer<ffi::SharedGlobalScanState, ffi::drop_global_scan_state> KernelGlobalScanState;
-typedef TemplatedUniqueKernelPointer<ffi::SharedScanDataIterator, ffi::kernel_scan_data_free> KernelScanDataIterator;
+typedef TemplatedUniqueKernelPointer<ffi::SharedSnapshot, ffi::free_snapshot> KernelSnapshot;
+typedef TemplatedUniqueKernelPointer<ffi::SharedExternEngine, ffi::free_engine> KernelExternEngine;
+typedef TemplatedUniqueKernelPointer<ffi::SharedScan, ffi::free_scan> KernelScan;
+typedef TemplatedUniqueKernelPointer<ffi::SharedGlobalScanState, ffi::free_global_scan_state> KernelGlobalScanState;
+typedef TemplatedUniqueKernelPointer<ffi::SharedScanDataIterator, ffi::free_kernel_scan_data> KernelScanDataIterator;
 
 struct KernelUtils {
     static ffi::KernelStringSlice ToDeltaString(const string &str);
@@ -140,6 +141,10 @@ private:
 
     uintptr_t VisitConstantFilter(const string &col_name, const ConstantFilter &filter, ffi::KernelExpressionVisitorState* state);
     uintptr_t VisitAndFilter(const string &col_name, const ConjunctionAndFilter &filter, ffi::KernelExpressionVisitorState* state);
+
+    uintptr_t VisitIsNull(const string &col_name, ffi::KernelExpressionVisitorState* state);
+    uintptr_t VisitIsNotNull(const string &col_name, ffi::KernelExpressionVisitorState* state);
+
     uintptr_t VisitFilter(const string &col_name, const TableFilter &filter, ffi::KernelExpressionVisitorState* state);
 };
 

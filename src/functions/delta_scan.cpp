@@ -18,6 +18,7 @@
 
 #include <string>
 #include <numeric>
+#include <regex>
 
 namespace duckdb {
 
@@ -25,11 +26,32 @@ static void* allocate_string(const struct ffi::KernelStringSlice slice) {
     return new string(slice.ptr, slice.len);
 }
 
-static void visit_callback(ffi::NullableCvoid engine_context, struct ffi::KernelStringSlice path, int64_t size, const ffi::DvInfo *dv_info, const struct ffi::CStringMap *partition_values) {
+string url_decode(string input) {
+    string result;
+    result.reserve(input.size());
+    char ch;
+    replace(input.begin(), input.end(), '+', ' ');
+    for (idx_t i = 0; i < input.length(); i++) {
+        if (int(input[i]) == 37) {
+            unsigned int ii;
+            sscanf(input.substr(i + 1, 2).c_str(), "%x", &ii);
+            ch = static_cast<char>(ii);
+            result += ch;
+            i += 2;
+        } else {
+            result += input[i];
+        }
+    }
+    return result;
+}
+
+static void visit_callback(ffi::NullableCvoid engine_context, struct ffi::KernelStringSlice path, int64_t size, const ffi::Stats *, const ffi::DvInfo *dv_info, const struct ffi::CStringMap *partition_values) {
     auto context = (DeltaSnapshot *) engine_context;
     auto path_string =  context->GetPath();
     StringUtil::RTrim(path_string, "/");
     path_string += "/" + KernelUtils::FromDeltaString(path);
+
+    path_string = url_decode(path_string);
 
     // First we append the file to our resolved files
     context->resolved_files.push_back(DeltaSnapshot::ToDuckDBPath(path_string));
@@ -61,62 +83,254 @@ static void visit_callback(ffi::NullableCvoid engine_context, struct ffi::Kernel
     context->metadata.back()->partition_map = std::move(constant_map);
 }
 
-  static void visit_data(void *engine_context, ffi::EngineData* engine_data, const struct ffi::KernelBoolSlice selection_vec) {
+  static void visit_data(void *engine_context, ffi::ExclusiveEngineData* engine_data, const struct ffi::KernelBoolSlice selection_vec) {
     ffi::visit_scan_data(engine_data, selection_vec, engine_context, visit_callback);
+}
+
+string ParseAccountNameFromEndpoint(const string& endpoint) {
+    if (!StringUtil::StartsWith(endpoint, "https://")) {
+        return "";
+    }
+    auto result = endpoint.find('.', 8);
+    if (result == endpoint.npos) {
+        return "";
+    }
+    return endpoint.substr(8,result-8);
+}
+
+string parseFromConnectionString(const string& connectionString, const string& key) {
+    std::regex pattern(key + "=([^;]+)(?=;|$)");
+    std::smatch matches;
+    if (std::regex_search(connectionString, matches, pattern) && matches.size() > 1) {
+        // The second match ([1]) contains the access key
+        return matches[1].str();
+    }
+    return "";
 }
 
 static ffi::EngineBuilder* CreateBuilder(ClientContext &context, const string &path) {
     ffi::EngineBuilder* builder;
 
     // For "regular" paths we early out with the default builder config
-    if (!StringUtil::StartsWith(path, "s3://")) {
+    if (!StringUtil::StartsWith(path, "s3://") &&
+        !StringUtil::StartsWith(path, "gcs://") &&
+        !StringUtil::StartsWith(path, "gs://") &&
+        !StringUtil::StartsWith(path, "r2://") &&
+        !StringUtil::StartsWith(path, "azure://") &&
+        !StringUtil::StartsWith(path, "az://") &&
+        !StringUtil::StartsWith(path, "abfs://") &&
+        !StringUtil::StartsWith(path, "abfss://")) {
         auto interface_builder_res = ffi::get_engine_builder(KernelUtils::ToDeltaString(path), DuckDBEngineError::AllocateError);
         return KernelUtils::UnpackResult(interface_builder_res, "get_engine_interface_builder for path " + path);
     }
 
-    auto end_of_container = path.find('/',5);
+    string bucket;
+    string path_in_bucket;
+    string secret_type;
 
-    if(end_of_container == string::npos) {
-        throw IOException("Invalid s3 url passed to delta scan: %s", path);
+    if (StringUtil::StartsWith(path, "s3://")) {
+        auto end_of_container = path.find('/',5);
+
+        if(end_of_container == string::npos) {
+            throw IOException("Invalid s3 url passed to delta scan: %s", path);
+        }
+        bucket = path.substr(5, end_of_container-5);
+        path_in_bucket = path.substr(end_of_container);
+        secret_type = "s3";
+    } else if (StringUtil::StartsWith(path, "gcs://")) {
+        auto end_of_container = path.find('/',6);
+
+        if(end_of_container == string::npos) {
+            throw IOException("Invalid gcs url passed to delta scan: %s", path);
+        }
+        bucket = path.substr(6, end_of_container-6);
+        path_in_bucket = path.substr(end_of_container);
+        secret_type = "gcs";
+    } else if (StringUtil::StartsWith(path, "gs://")) {
+        auto end_of_container = path.find('/',5);
+
+        if(end_of_container == string::npos) {
+            throw IOException("Invalid gcs url passed to delta scan: %s", path);
+        }
+        bucket = path.substr(5, end_of_container-5);
+        path_in_bucket = path.substr(end_of_container);
+        secret_type = "gcs";
+    } else if (StringUtil::StartsWith(path, "r2://")) {
+        auto end_of_container = path.find('/',5);
+
+        if(end_of_container == string::npos) {
+            throw IOException("Invalid gcs url passed to delta scan: %s", path);
+        }
+        bucket = path.substr(5, end_of_container-5);
+        path_in_bucket = path.substr(end_of_container);
+        secret_type = "r2";
+    } else if ((StringUtil::StartsWith(path, "azure://")) || (StringUtil::StartsWith(path, "abfss://"))) {
+        auto end_of_container = path.find('/',8);
+
+        if(end_of_container == string::npos) {
+            throw IOException("Invalid azure url passed to delta scan: %s", path);
+        }
+        bucket = path.substr(8, end_of_container-8);
+        path_in_bucket = path.substr(end_of_container);
+        secret_type = "azure";
+    } else if (StringUtil::StartsWith(path, "az://")) {
+        auto end_of_container = path.find('/',5);
+
+        if(end_of_container == string::npos) {
+            throw IOException("Invalid azure url passed to delta scan: %s", path);
+        }
+        bucket = path.substr(5, end_of_container-5);
+        path_in_bucket = path.substr(end_of_container);
+        secret_type = "azure";
+    } else if (StringUtil::StartsWith(path, "abfs://")) {
+        auto end_of_container = path.find('/',7);
+
+        if(end_of_container == string::npos) {
+            throw IOException("Invalid azure url passed to delta scan: %s", path);
+        }
+        bucket = path.substr(8, end_of_container-8);
+        path_in_bucket = path.substr(end_of_container);
+        secret_type = "azure";
     }
-    auto bucket = path.substr(5, end_of_container-5);
-    auto path_in_bucket = path.substr(end_of_container);
 
-    auto interface_builder_res = ffi::get_engine_builder(KernelUtils::ToDeltaString(path), DuckDBEngineError::AllocateError);
-    builder = KernelUtils::UnpackResult(interface_builder_res, "get_engine_interface_builder for path " + path);
+    // We need to substitute DuckDB's usage of s3 and r2 paths because delta kernel needs to just interpret them as s3 protocol servers.
+    string cleaned_path;
+    if (StringUtil::StartsWith(path, "r2://") || StringUtil::StartsWith(path, "gs://") ) {
+        cleaned_path = "s3://" + path.substr(5);
+    } else if (StringUtil::StartsWith(path, "gcs://")) {
+        cleaned_path = "s3://" + path.substr(6);
+    } else {
+        cleaned_path = path;
+    }
 
-    // For S3 paths we need to trim the url, set the container, and fetch a potential secret
+    auto interface_builder_res = ffi::get_engine_builder(KernelUtils::ToDeltaString(cleaned_path), DuckDBEngineError::AllocateError);
+    builder = KernelUtils::UnpackResult(interface_builder_res, "get_engine_interface_builder for path " + cleaned_path);
+
+    // For S3 or Azure paths we need to trim the url, set the container, and fetch a potential secret
     auto &secret_manager = SecretManager::Get(context);
     auto transaction = CatalogTransaction::GetSystemCatalogTransaction(context);
 
-    auto secret_match = secret_manager.LookupSecret(transaction, path, "s3");
+    auto secret_match = secret_manager.LookupSecret(transaction, path, secret_type);
 
     // No secret: nothing left to do here!
     if (!secret_match.HasMatch()) {
+        if (StringUtil::StartsWith(path, "r2://") || StringUtil::StartsWith(path, "gs://") || StringUtil::StartsWith(path, "gcs://")) {
+            throw NotImplementedException("Can not scan a gcs:// gs:// or r2:// url without a secret providing its endpoint currently. Please create an R2 or GCS secret containing the credentials for this endpoint and try again.");
+        }
+
         return builder;
     }
     const auto &kv_secret = dynamic_cast<const KeyValueSecret &>(*secret_match.secret_entry->secret);
 
-    auto key_id = kv_secret.TryGetValue("key_id").ToString();
-    auto secret = kv_secret.TryGetValue("secret").ToString();
-    auto session_token = kv_secret.TryGetValue("session_token").ToString();
-    auto region = kv_secret.TryGetValue("region").ToString();
+    // Here you would need to add the logic for setting the builder options for Azure
+    // This is just a placeholder and will need to be replaced with the actual logic
+    if (secret_type == "s3" || secret_type == "gcs" || secret_type == "r2") {
+        auto key_id = kv_secret.TryGetValue("key_id").ToString();
+        auto secret = kv_secret.TryGetValue("secret").ToString();
+        auto session_token = kv_secret.TryGetValue("session_token").ToString();
+        auto region = kv_secret.TryGetValue("region").ToString();
+        auto endpoint = kv_secret.TryGetValue("endpoint").ToString();
+        auto use_ssl = kv_secret.TryGetValue("use_ssl").ToString();
+        auto url_style = kv_secret.TryGetValue("url_style").ToString();
 
-    if (key_id.empty() && secret.empty()) {
-        ffi::set_builder_option(builder, KernelUtils::ToDeltaString("skip_signature"), KernelUtils::ToDeltaString("true"));
-    }
+        if (key_id.empty() && secret.empty()) {
+            ffi::set_builder_option(builder, KernelUtils::ToDeltaString("skip_signature"), KernelUtils::ToDeltaString("true"));
+        }
 
-    if (!key_id.empty()) {
-        ffi::set_builder_option(builder, KernelUtils::ToDeltaString("aws_access_key_id"), KernelUtils::ToDeltaString(key_id));
-    }
-    if (!secret.empty()) {
-        ffi::set_builder_option(builder, KernelUtils::ToDeltaString("aws_secret_access_key"), KernelUtils::ToDeltaString(secret));
-    }
-    if (!session_token.empty()) {
-        ffi::set_builder_option(builder, KernelUtils::ToDeltaString("aws_session_token"), KernelUtils::ToDeltaString(session_token));
-    }
-    ffi::set_builder_option(builder, KernelUtils::ToDeltaString("aws_region"), KernelUtils::ToDeltaString(region));
+        if (!key_id.empty()) {
+            ffi::set_builder_option(builder, KernelUtils::ToDeltaString("aws_access_key_id"), KernelUtils::ToDeltaString(key_id));
+        }
+        if (!secret.empty()) {
+            ffi::set_builder_option(builder, KernelUtils::ToDeltaString("aws_secret_access_key"), KernelUtils::ToDeltaString(secret));
+        }
+        if (!session_token.empty()) {
+            ffi::set_builder_option(builder, KernelUtils::ToDeltaString("aws_session_token"), KernelUtils::ToDeltaString(session_token));
+        }
+        if (!endpoint.empty() && endpoint != "s3.amazonaws.com") {
+            if(!StringUtil::StartsWith(endpoint, "https://") && !StringUtil::StartsWith(endpoint, "http://")) {
+                if(use_ssl == "1" || use_ssl == "NULL") {
+                    endpoint = "https://" + endpoint;
+                } else {
+                    endpoint = "http://" + endpoint;
+                }
+            }
 
+            if (StringUtil::StartsWith(endpoint, "http://")) {
+                ffi::set_builder_option(builder, KernelUtils::ToDeltaString("allow_http"), KernelUtils::ToDeltaString("true"));
+            }
+            ffi::set_builder_option(builder, KernelUtils::ToDeltaString("aws_endpoint"), KernelUtils::ToDeltaString(endpoint));
+        }
+
+        ffi::set_builder_option(builder, KernelUtils::ToDeltaString("aws_region"), KernelUtils::ToDeltaString(region));
+
+    } else if (secret_type == "azure") {
+        // azure seems to be super complicated as we need to cover duckdb azure plugin and delta RS builder
+        // and both require different settings
+        auto connection_string = kv_secret.TryGetValue("connection_string").ToString();
+        auto account_name = kv_secret.TryGetValue("account_name").ToString();
+        auto endpoint = kv_secret.TryGetValue("endpoint").ToString();
+        auto client_id = kv_secret.TryGetValue("client_id").ToString();
+        auto client_secret = kv_secret.TryGetValue("client_secret").ToString();
+        auto tenant_id = kv_secret.TryGetValue("tenant_id").ToString();
+        auto chain = kv_secret.TryGetValue("chain").ToString();
+        auto provider = kv_secret.GetProvider();
+
+        if (provider == "credential_chain") {
+            // Authentication option 1a: using the cli authentication
+            if (chain.find("cli") != std::string::npos) {
+                ffi::set_builder_option(builder, KernelUtils::ToDeltaString("use_azure_cli"), KernelUtils::ToDeltaString("true"));
+            }
+            // Authentication option 1b: non-cli credential chains will just "hope for the best" technically since we are using the default
+            // credential chain provider duckDB and delta-kernel-rs should find the same auth
+        } else if (!connection_string.empty() && connection_string != "NULL") {
+
+            // Authentication option 2: a connection string based on account key
+            auto account_key = parseFromConnectionString(connection_string, "AccountKey");
+            account_name = parseFromConnectionString(connection_string, "AccountName");
+            // Authentication option 2: a connection string based on account key
+            if (!account_name.empty() && !account_key.empty()) {
+                ffi::set_builder_option(builder, KernelUtils::ToDeltaString("account_key"),
+                                        KernelUtils::ToDeltaString(account_key));
+            } else {
+                // Authentication option 2b: a connection string based on SAS token
+                endpoint = parseFromConnectionString(connection_string, "BlobEndpoint");
+                if (account_name.empty()) {
+                    account_name = ParseAccountNameFromEndpoint(endpoint);
+                }
+                auto sas_token = parseFromConnectionString(connection_string, "SharedAccessSignature");
+                if (!sas_token.empty()) {
+                    ffi::set_builder_option(builder, KernelUtils::ToDeltaString("sas_token"),
+                                            KernelUtils::ToDeltaString(sas_token));
+                }
+            }
+        } else if (provider == "service_principal") {
+            if (!client_id.empty() && client_id != "NULL") {
+                ffi::set_builder_option(builder, KernelUtils::ToDeltaString("azure_client_id"), KernelUtils::ToDeltaString(client_id));
+            }
+            if (!client_secret.empty() && client_secret != "NULL") {
+                ffi::set_builder_option(builder, KernelUtils::ToDeltaString("azure_client_secret"), KernelUtils::ToDeltaString(client_secret));
+            }
+            if (!tenant_id.empty() && tenant_id != "NULL") {
+                ffi::set_builder_option(builder, KernelUtils::ToDeltaString("azure_tenant_id"), KernelUtils::ToDeltaString(tenant_id));
+            }
+        } else {
+            // Authentication option 3: no authentication, just an account name
+            ffi::set_builder_option(builder, KernelUtils::ToDeltaString("azure_skip_signature"), KernelUtils::ToDeltaString("true"));
+        }
+        // Set the use_emulator option for when the azurite test server is used
+        if (account_name == "devstoreaccount1" || connection_string.find("devstoreaccount1") != string::npos) {
+            ffi::set_builder_option(builder, KernelUtils::ToDeltaString("use_emulator"), KernelUtils::ToDeltaString("true"));
+        }
+        if (!account_name.empty() && account_name != "NULL") {
+            ffi::set_builder_option(builder, KernelUtils::ToDeltaString("account_name"), KernelUtils::ToDeltaString(account_name)); //needed for delta RS builder
+        }
+        if (!endpoint.empty() && endpoint != "NULL") {
+            ffi::set_builder_option(builder, KernelUtils::ToDeltaString("azure_endpoint"), KernelUtils::ToDeltaString(endpoint));
+        } else {
+            ffi::set_builder_option(builder, KernelUtils::ToDeltaString("azure_endpoint"), KernelUtils::ToDeltaString("https://" + account_name + ".blob.core.windows.net/"));
+        }
+        ffi::set_builder_option(builder, KernelUtils::ToDeltaString("container_name"), KernelUtils::ToDeltaString(bucket));
+    }
     return builder;
 }
 
@@ -343,6 +557,9 @@ void DeltaMultiFileReader::FinalizeBind(const MultiFileReaderOptions &file_optio
     if (!file_metadata->partition_map.empty()) {
         for (idx_t i = 0; i < global_column_ids.size(); i++) {
             column_t col_id = global_column_ids[i];
+            if (IsRowIdColumnId(col_id)) {
+                continue;
+            }
             auto col_partition_entry = file_metadata->partition_map.find(global_names[col_id]);
             if (col_partition_entry != file_metadata->partition_map.end()) {
                 // Todo: use https://github.com/delta-io/delta/blob/master/PROTOCOL.md#partition-value-serialization
@@ -467,13 +684,79 @@ unique_ptr<MultiFileReaderGlobalState> DeltaMultiFileReader::InitializeGlobalSta
     return std::move(res);
 }
 
+// This code is duplicated from MultiFileReader::CreateNameMapping the difference is that for columns that are not found
+// in the parquet files, we just add null constant columns
+static void CustomMulfiFileNameMapping(const string &file_name, const vector<LogicalType> &local_types,
+                                        const vector<string> &local_names, const vector<LogicalType> &global_types,
+                                        const vector<string> &global_names, const vector<column_t> &global_column_ids,
+                                        MultiFileReaderData &reader_data, const string &initial_file,
+                                        optional_ptr<MultiFileReaderGlobalState> global_state) {
+    D_ASSERT(global_types.size() == global_names.size());
+	D_ASSERT(local_types.size() == local_names.size());
+	// we have expected types: create a map of name -> column index
+	case_insensitive_map_t<idx_t> name_map;
+	for (idx_t col_idx = 0; col_idx < local_names.size(); col_idx++) {
+		name_map[local_names[col_idx]] = col_idx;
+	}
+	for (idx_t i = 0; i < global_column_ids.size(); i++) {
+		// check if this is a constant column
+		bool constant = false;
+		for (auto &entry : reader_data.constant_map) {
+			if (entry.column_id == i) {
+				constant = true;
+				break;
+			}
+		}
+		if (constant) {
+			// this column is constant for this file
+			continue;
+		}
+		// not constant - look up the column in the name map
+		auto global_id = global_column_ids[i];
+		if (global_id >= global_types.size()) {
+			throw InternalException(
+			    "MultiFileReader::CreatePositionalMapping - global_id is out of range in global_types for this file");
+		}
+		auto &global_name = global_names[global_id];
+		auto entry = name_map.find(global_name);
+		if (entry == name_map.end()) {
+			string candidate_names;
+			for (auto &local_name : local_names) {
+				if (!candidate_names.empty()) {
+					candidate_names += ", ";
+				}
+				candidate_names += local_name;
+			}
+			// FIXME: this override is pretty hacky: for missing columns we just insert NULL constants
+		    auto &global_type = global_types[global_id];
+		    Value val (global_type);
+		    reader_data.constant_map.push_back({i, val});
+		    continue;
+		}
+		// we found the column in the local file - check if the types are the same
+		auto local_id = entry->second;
+		D_ASSERT(global_id < global_types.size());
+		D_ASSERT(local_id < local_types.size());
+		auto &global_type = global_types[global_id];
+		auto &local_type = local_types[local_id];
+		if (global_type != local_type) {
+			reader_data.cast_map[local_id] = global_type;
+		}
+		// the types are the same - create the mapping
+		reader_data.column_mapping.push_back(i);
+		reader_data.column_ids.push_back(local_id);
+	}
+
+	reader_data.empty_columns = reader_data.column_ids.empty();
+}
+
 void DeltaMultiFileReader::CreateNameMapping(const string &file_name, const vector<LogicalType> &local_types,
                                         const vector<string> &local_names, const vector<LogicalType> &global_types,
                                         const vector<string> &global_names, const vector<column_t> &global_column_ids,
                                         MultiFileReaderData &reader_data, const string &initial_file,
                                         optional_ptr<MultiFileReaderGlobalState> global_state) {
     // First call the base implementation to do most mapping
-    MultiFileReader::CreateNameMapping(file_name, local_types, local_names, global_types, global_names, global_column_ids, reader_data, initial_file, global_state);
+    CustomMulfiFileNameMapping(file_name, local_types, local_names, global_types, global_names, global_column_ids, reader_data, initial_file, global_state);
 
     // Then we handle delta specific mapping
     D_ASSERT(global_state);
@@ -587,7 +870,6 @@ TableFunctionSet DeltaFunctions::GetDeltaScanFunction(DatabaseInstance &instance
         function.deserialize = nullptr;
         function.statistics = nullptr;
         function.table_scan_progress = nullptr;
-        function.cardinality = nullptr;
         function.get_bind_info = nullptr;
 
         // Schema param is just confusing here

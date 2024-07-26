@@ -1,4 +1,6 @@
 build
+benchmark_results
+duckdb_benchmark_data/
 .idea
 cmake-build-debug
 duckdb_unittest_tempdir/
@@ -7,3 +9,7 @@ testext
 test/python/__pycache__/
 .Rhistory
 data/generated
+__azurite*__.json
+__blobstorage__
+.venv
+.vscode

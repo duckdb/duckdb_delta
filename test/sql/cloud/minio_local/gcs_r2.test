@@ -1,0 +1,93 @@
+# name: test/sql/cloud/minio_local/gcs_r2.test
+# description: test delta extension with GCS and R2
+# group: [aws]
+
+require httpfs
+
+require parquet
+
+require delta
+
+require aws
+
+require-env DUCKDB_MINIO_TEST_SERVER_AVAILABLE
+
+require-env AWS_ACCESS_KEY_ID
+
+require-env AWS_SECRET_ACCESS_KEY
+
+require-env AWS_DEFAULT_REGION
+
+require-env AWS_ENDPOINT
+
+statement ok
+set secret_directory='__TEST_DIR__/minio_local_gcs_env'
+
+statement error
+FROM delta_scan('gcs://test-bucket/dat/all_primitive_types/delta')
+----
+Can not scan a gcs:// gs:// or r2:// url without a secret providing its endpoint currently. Please create an R2 or GCS secret containing the credentials for this endpoint and try again.
+
+statement error
+FROM delta_scan('gs://test-bucket/dat/all_primitive_types/delta')
+----
+Can not scan a gcs:// gs:// or r2:// url without a secret providing its endpoint currently. Please create an R2 or GCS secret containing the credentials for this endpoint and try again.
+
+statement error
+FROM delta_scan('r2://test-bucket/dat/all_primitive_types/delta')
+----
+Can not scan a gcs:// gs:// or r2:// url without a secret providing its endpoint currently. Please create an R2 or GCS secret containing the credentials for this endpoint and try again.
+
+# create a fake gcs secret
+statement ok
+CREATE SECRET (
+    TYPE GCS,
+	KEY_ID '${AWS_ACCESS_KEY_ID}',
+	SECRET '${AWS_SECRET_ACCESS_KEY}',
+	REGION '${AWS_DEFAULT_REGION}',
+	ENDPOINT '${AWS_ENDPOINT}',
+	USE_SSL false 
+)
+
+query I
+SELECT int32
+FROM delta_scan('gcs://test-bucket-public/dat/all_primitive_types/delta')
+----
+0
+1
+2
+3
+4
+
+query I
+SELECT int32
+FROM delta_scan('gs://test-bucket-public/dat/all_primitive_types/delta')
+----
+0
+1
+2
+3
+4
+
+# create a fake r2 secret
+statement ok
+CREATE SECRET s1 (
+    TYPE R2,
+    PROVIDER config,
+    account_id 'some_bogus_account',
+    KEY_ID '${AWS_ACCESS_KEY_ID}',
+	SECRET '${AWS_SECRET_ACCESS_KEY}',
+	REGION '${AWS_DEFAULT_REGION}',
+	ENDPOINT '${AWS_ENDPOINT}',
+	USE_SSL false 
+)
+
+query I
+SELECT int32
+FROM delta_scan('r2://test-bucket-public/dat/all_primitive_types/delta')
+----
+0
+1
+2
+3
+4
