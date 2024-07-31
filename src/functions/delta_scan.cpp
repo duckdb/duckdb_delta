@@ -277,7 +277,7 @@ static ffi::EngineBuilder* CreateBuilder(ClientContext &context, const string &p
 
         if (provider == "credential_chain") {
             // Authentication option 1a: using the cli authentication
-            if (chain.find("cli") != std::string::npos) {
+            if (chain.empty() || chain.find("cli") != std::string::npos) {
                 ffi::set_builder_option(builder, KernelUtils::ToDeltaString("use_azure_cli"), KernelUtils::ToDeltaString("true"));
             }
             // Authentication option 1b: non-cli credential chains will just "hope for the best" technically since we are using the default
