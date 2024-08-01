@@ -27,8 +27,8 @@ unique_ptr<SchemaVisitor::FieldList> SchemaVisitor::VisitSnapshotSchema(ffi::Sha
     visitor.visit_boolean = VisitSimpleType<LogicalType::BOOLEAN>();
     visitor.visit_binary = VisitSimpleType<LogicalType::VARCHAR>();
     visitor.visit_date = VisitSimpleType<LogicalType::DATE>();
-    visitor.visit_timestamp = VisitSimpleType<LogicalType::TIMESTAMP>();
-    visitor.visit_timestamp_ntz = VisitSimpleType<LogicalType::TIMESTAMP_TZ>();
+    visitor.visit_timestamp = VisitSimpleType<LogicalType::TIMESTAMP_TZ>();
+    visitor.visit_timestamp_ntz = VisitSimpleType<LogicalType::TIMESTAMP>();
 
     uintptr_t result = visit_schema(snapshot, &visitor);
     return state.TakeFieldList(result);
