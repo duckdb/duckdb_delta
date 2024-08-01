@@ -112,7 +112,7 @@ FROM delta_scan('${DAT_PATH}/out/reader_tests/generated/multi_partitioned/delta'
 ----
 
 query I rowsort multi_partitioned
-SELECT letter, date, decode(data) as data, number
+SELECT *
 FROM parquet_scan('${DAT_PATH}/out/reader_tests/generated/multi_partitioned/expected/latest/**/*.parquet')
 ----
 
