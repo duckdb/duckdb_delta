@@ -13,7 +13,7 @@ TMP_PATH = '/tmp'
 def delete_old_files():
     if (os.path.isdir(BASE_PATH)):
         shutil.rmtree(BASE_PATH)
-def generate_test_data_delta_rs(path, query, part_column=False):
+def generate_test_data_delta_rs(path, query, part_column=False, add_golden_table=True):
     """
     generate_test_data_delta_rs generates some test data using delta-rs and duckdb
 
@@ -38,12 +38,13 @@ def generate_test_data_delta_rs(path, query, part_column=False):
     else:
         write_deltalake(f"{generated_path}/delta_lake", test_table_df)
 
-    # Write DuckDB's reference data
-    os.mkdir(f'{generated_path}/duckdb')
-    if (part_column):
-        con.sql(f"COPY test_table to '{generated_path}/duckdb' (FORMAT parquet, PARTITION_BY {part_column})")
-    else:
-        con.sql(f"COPY test_table to '{generated_path}/duckdb/data.parquet' (FORMAT parquet)")
+    if add_golden_table:
+        # Write DuckDB's reference data
+        os.mkdir(f'{generated_path}/duckdb')
+        if (part_column):
+            con.sql(f"COPY test_table to '{generated_path}/duckdb' (FORMAT parquet, PARTITION_BY {part_column})")
+        else:
+            con.sql(f"COPY test_table to '{generated_path}/duckdb/data.parquet' (FORMAT parquet)")
 
 def generate_test_data_pyspark(name, current_path, input_path, delete_predicate = False):
     """
@@ -112,14 +113,18 @@ query = "call dbgen(sf=1);"
 query += "CREATE table test_table AS SELECT *, l_orderkey%10 as part from lineitem;"
 generate_test_data_delta_rs("lineitem_sf1_10part", query, "part")
 
+## Simple table with a blob as a value
+query = "create table test_table as SELECT encode('ABCDE') as blob, encode('ABCDE') as blob_part, 'ABCDE' as string UNION ALL SELECT encode('😈') as blob, encode('😈') as blob_part, '😈' as string"
+generate_test_data_delta_rs("simple_blob_table", query, "blob_part", add_golden_table=False)
+
 ## Simple partitioned table with structs
 query = "CREATE table test_table AS SELECT {'i':i, 'j':i+1} as value, i%2 as part from range(0,10) tbl(i);"
-generate_test_data_delta_rs("simple_partitioned_with_structs", query, "part");
+generate_test_data_delta_rs("simple_partitioned_with_structs", query, "part")
 
 ## Partitioned table with all types we can file skip on
 for type in ["bool", "int", "tinyint", "smallint", "bigint", "float", "double", "varchar"]:
     query = f"CREATE table test_table as select i::{type} as value, i::{type} as part from range(0,2) tbl(i)"
-    generate_test_data_delta_rs(f"test_file_skipping/{type}", query, "part");
+    generate_test_data_delta_rs(f"test_file_skipping/{type}", query, "part")
 
 ## Simple table with deletion vector
 con = duckdb.connect()
