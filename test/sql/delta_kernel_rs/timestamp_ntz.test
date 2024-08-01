@@ -8,7 +8,7 @@ require delta
 
 require-env DELTA_KERNEL_TESTS_PATH
 
-query III
+query IIIIII
 DESCRIBE FROM delta_scan('${DELTA_KERNEL_TESTS_PATH}/data-reader-timestamp_ntz') order by id
 ----
 id	INTEGER	YES	NULL	NULL	NULL

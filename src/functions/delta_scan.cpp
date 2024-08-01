@@ -563,7 +563,7 @@ void DeltaMultiFileReader::FinalizeBind(const MultiFileReaderOptions &file_optio
             auto col_partition_entry = file_metadata->partition_map.find(global_names[col_id]);
             if (col_partition_entry != file_metadata->partition_map.end()) {
                 // Todo: use https://github.com/delta-io/delta/blob/master/PROTOCOL.md#partition-value-serialization
-                auto maybe_value = Value(col_partition_entry->second).DefaultCastAs(global_types[i]);
+                auto maybe_value = Value(col_partition_entry->second).DefaultCastAs(global_types[col_id]);
                 reader_data.constant_map.emplace_back(i, maybe_value);
             }
         }
