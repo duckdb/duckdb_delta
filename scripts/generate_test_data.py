@@ -13,6 +13,43 @@ TMP_PATH = '/tmp'
 def delete_old_files():
     if (os.path.isdir(BASE_PATH)):
         shutil.rmtree(BASE_PATH)
+def generate_test_data_delta_rs_multi(path, init, tables):
+    """
+    generate_test_data_delta_rs generates some test data using delta-rs and duckdb
+
+    :param path: the test data path (prefixed with BASE_PATH)
+    :param init: a duckdb query initializes the duckdb tables that will be written
+    :param tables: list of dicts containing the fields: name, query, (optionally) part_column
+    :return: describe what it returns
+    """
+    generated_path = f"{BASE_PATH}/{path}"
+
+    if (os.path.isdir(generated_path)):
+        return
+
+    con = duckdb.connect()
+
+    con.sql(init)
+
+    for table in tables:
+        # Write delta table data
+        test_table_df = con.sql(table['query']).df()
+        table_name = table['name']
+
+        os.makedirs(f"{generated_path}/{table_name}/delta_lake", exist_ok=True)
+        os.makedirs(f"{generated_path}/{table_name}/duckdb", exist_ok=True)
+
+        if 'part_column' in table:
+            write_deltalake(f"{generated_path}/{table_name}/delta_lake", test_table_df,  partition_by=[table['part_column']])
+        else:
+            write_deltalake(f"{generated_path}/{table_name}/delta_lake", test_table_df)
+
+        # Write DuckDB's reference data
+        if 'part_column' in table:
+            con.sql(f"COPY ({table['query']}) to '{generated_path}/{table_name}/duckdb' (FORMAT parquet, PARTITION_BY {table['part_column']})")
+        else:
+            con.sql(f"COPY ({table['query']}) to '{generated_path}/{table_name}/duckdb/data.parquet' (FORMAT parquet)")
+
 def generate_test_data_delta_rs(path, query, part_column=False):
     """
     generate_test_data_delta_rs generates some test data using delta-rs and duckdb
@@ -86,12 +123,19 @@ def generate_test_data_pyspark(name, current_path, input_path, delete_predicate 
     if delete_predicate:
         deltaTable.delete(delete_predicate)
 
-    ## Writing the
+    ## WRITING THE PARQUET FILES
     df = spark.table(f'test_table_{name}')
     df.write.parquet(parquet_reference_path, mode='overwrite')
 
 # TO CLEAN, uncomment
 # delete_old_files()
+
+### TPCH SF1
+init = "call dbgen(sf=1);"
+tables = ["customer","lineitem","nation","orders","part","partsupp","region","supplier"]
+queries = [f"from {x}" for x in tables]
+tables = [{'name': x[0], 'query':x[1]} for x in zip(tables,queries)]
+generate_test_data_delta_rs_multi("delta_rs_tpch_sf1", init, tables)
 
 ### Simple partitioned table
 query = "CREATE table test_table AS SELECT i, i%2 as part from range(0,10) tbl(i);"
