@@ -83,7 +83,7 @@ static void visit_callback(ffi::NullableCvoid engine_context, struct ffi::Kernel
     context->metadata.back()->partition_map = std::move(constant_map);
 }
 
-  static void visit_data(void *engine_context, ffi::EngineData* engine_data, const struct ffi::KernelBoolSlice selection_vec) {
+  static void visit_data(void *engine_context, ffi::ExclusiveEngineData* engine_data, const struct ffi::KernelBoolSlice selection_vec) {
     ffi::visit_scan_data(engine_data, selection_vec, engine_context, visit_callback);
 }
 
@@ -562,9 +562,13 @@ void DeltaMultiFileReader::FinalizeBind(const MultiFileReaderOptions &file_optio
             }
             auto col_partition_entry = file_metadata->partition_map.find(global_names[col_id]);
             if (col_partition_entry != file_metadata->partition_map.end()) {
-                // Todo: use https://github.com/delta-io/delta/blob/master/PROTOCOL.md#partition-value-serialization
-                auto maybe_value = Value(col_partition_entry->second).DefaultCastAs(global_types[i]);
-                reader_data.constant_map.emplace_back(i, maybe_value);
+                auto &current_type = global_types[col_id];
+                if (current_type == LogicalType::BLOB) {
+                    reader_data.constant_map.emplace_back(i, Value::BLOB_RAW(col_partition_entry->second));
+                } else {
+                    auto maybe_value = Value(col_partition_entry->second).DefaultCastAs(current_type);
+                    reader_data.constant_map.emplace_back(i, maybe_value);
+                }
             }
         }
     }
