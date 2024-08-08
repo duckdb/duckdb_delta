@@ -58,6 +58,19 @@ CREATE SECRET (
 FROM delta_scan('abfss://some/delta/table/with/auth');
 ```
 
+### GCS Example
+
+https://duckdb.org/docs/guides/network_cloud_storage/gcs_import.html
+You need to create [HMAC keys](https://console.cloud.google.com/storage/settings;tab=interoperability) and declare a secret.
+
+```SQL
+CREATE SECRET (
+    TYPE GCS,
+    KEY_ID 'xxxx',
+    SECRET 'yyy'
+);
+```
+
 ## Features
 
 While still experimental, many (scanning) features/optimizations are already supported in this extension as it reuses most of DuckDB's
