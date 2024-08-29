@@ -19,6 +19,7 @@
 #include <string>
 #include <numeric>
 #include <regex>
+#include <duckdb/main/client_data.hpp>
 
 namespace duckdb {
 
@@ -222,16 +223,21 @@ static ffi::EngineBuilder* CreateBuilder(ClientContext &context, const string &p
     }
     const auto &kv_secret = dynamic_cast<const KeyValueSecret &>(*secret_match.secret_entry->secret);
 
+    KeyValueSecretReader secret_reader(kv_secret, *context.client_data->file_opener);
+
     // Here you would need to add the logic for setting the builder options for Azure
     // This is just a placeholder and will need to be replaced with the actual logic
     if (secret_type == "s3" || secret_type == "gcs" || secret_type == "r2") {
-        auto key_id = kv_secret.TryGetValue("key_id").ToString();
-        auto secret = kv_secret.TryGetValue("secret").ToString();
-        auto session_token = kv_secret.TryGetValue("session_token").ToString();
-        auto region = kv_secret.TryGetValue("region").ToString();
-        auto endpoint = kv_secret.TryGetValue("endpoint").ToString();
-        auto use_ssl = kv_secret.TryGetValue("use_ssl").ToString();
-        auto url_style = kv_secret.TryGetValue("url_style").ToString();
+
+        string key_id, secret, session_token, region, endpoint, url_style;
+        bool use_ssl = true;
+        secret_reader.TryGetSecretKey("key_id", key_id);
+        secret_reader.TryGetSecretKey("secret", secret);
+        secret_reader.TryGetSecretKey("session_token", session_token);
+        secret_reader.TryGetSecretKey("region", region);
+        secret_reader.TryGetSecretKey("endpoint", endpoint);
+        secret_reader.TryGetSecretKey("url_style", url_style);
+        secret_reader.TryGetSecretKey("use_ssl", use_ssl);
 
         if (key_id.empty() && secret.empty()) {
             ffi::set_builder_option(builder, KernelUtils::ToDeltaString("skip_signature"), KernelUtils::ToDeltaString("true"));
@@ -248,7 +254,7 @@ static ffi::EngineBuilder* CreateBuilder(ClientContext &context, const string &p
         }
         if (!endpoint.empty() && endpoint != "s3.amazonaws.com") {
             if(!StringUtil::StartsWith(endpoint, "https://") && !StringUtil::StartsWith(endpoint, "http://")) {
-                if(use_ssl == "1" || use_ssl == "NULL") {
+                if(use_ssl) {
                     endpoint = "https://" + endpoint;
                 } else {
                     endpoint = "http://" + endpoint;
@@ -266,13 +272,15 @@ static ffi::EngineBuilder* CreateBuilder(ClientContext &context, const string &p
     } else if (secret_type == "azure") {
         // azure seems to be super complicated as we need to cover duckdb azure plugin and delta RS builder
         // and both require different settings
-        auto connection_string = kv_secret.TryGetValue("connection_string").ToString();
-        auto account_name = kv_secret.TryGetValue("account_name").ToString();
-        auto endpoint = kv_secret.TryGetValue("endpoint").ToString();
-        auto client_id = kv_secret.TryGetValue("client_id").ToString();
-        auto client_secret = kv_secret.TryGetValue("client_secret").ToString();
-        auto tenant_id = kv_secret.TryGetValue("tenant_id").ToString();
-        auto chain = kv_secret.TryGetValue("chain").ToString();
+        string connection_string, account_name, endpoint, client_id, client_secret, tenant_id, chain;
+        secret_reader.TryGetSecretKey("connection_string", connection_string);
+        secret_reader.TryGetSecretKey("account_name", account_name);
+        secret_reader.TryGetSecretKey("endpoint", endpoint);
+        secret_reader.TryGetSecretKey("client_id", client_id);
+        secret_reader.TryGetSecretKey("client_secret", client_secret);
+        secret_reader.TryGetSecretKey("tenant_id", tenant_id);
+        secret_reader.TryGetSecretKey("chain", chain);
+
         auto provider = kv_secret.GetProvider();
 
         if (provider == "credential_chain") {
@@ -304,13 +312,13 @@ static ffi::EngineBuilder* CreateBuilder(ClientContext &context, const string &p
                 }
             }
         } else if (provider == "service_principal") {
-            if (!client_id.empty() && client_id != "NULL") {
+            if (!client_id.empty()) {
                 ffi::set_builder_option(builder, KernelUtils::ToDeltaString("azure_client_id"), KernelUtils::ToDeltaString(client_id));
             }
-            if (!client_secret.empty() && client_secret != "NULL") {
+            if (!client_secret.empty()) {
                 ffi::set_builder_option(builder, KernelUtils::ToDeltaString("azure_client_secret"), KernelUtils::ToDeltaString(client_secret));
             }
-            if (!tenant_id.empty() && tenant_id != "NULL") {
+            if (!tenant_id.empty()) {
                 ffi::set_builder_option(builder, KernelUtils::ToDeltaString("azure_tenant_id"), KernelUtils::ToDeltaString(tenant_id));
             }
         } else {
@@ -321,10 +329,10 @@ static ffi::EngineBuilder* CreateBuilder(ClientContext &context, const string &p
         if (account_name == "devstoreaccount1" || connection_string.find("devstoreaccount1") != string::npos) {
             ffi::set_builder_option(builder, KernelUtils::ToDeltaString("use_emulator"), KernelUtils::ToDeltaString("true"));
         }
-        if (!account_name.empty() && account_name != "NULL") {
+        if (!account_name.empty()) {
             ffi::set_builder_option(builder, KernelUtils::ToDeltaString("account_name"), KernelUtils::ToDeltaString(account_name)); //needed for delta RS builder
         }
-        if (!endpoint.empty() && endpoint != "NULL") {
+        if (!endpoint.empty()) {
             ffi::set_builder_option(builder, KernelUtils::ToDeltaString("azure_endpoint"), KernelUtils::ToDeltaString(endpoint));
         } else {
             ffi::set_builder_option(builder, KernelUtils::ToDeltaString("azure_endpoint"), KernelUtils::ToDeltaString("https://" + account_name + ".blob.core.windows.net/"));
