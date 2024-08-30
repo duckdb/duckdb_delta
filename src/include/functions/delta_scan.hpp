@@ -22,7 +22,7 @@ struct DeltaFileMetaData {
 
     ~DeltaFileMetaData() {
         if (selection_vector.ptr) {
-            ffi::drop_bool_slice(selection_vector);
+            ffi::free_bool_slice(selection_vector);
         }
     }
 

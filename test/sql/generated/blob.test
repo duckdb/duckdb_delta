@@ -1,0 +1,27 @@
+# name: test/sql/generated/blob.test
+# description: Test the BLOB type
+# group: [delta_generated]
+
+require parquet
+
+require delta
+
+require-env GENERATED_DATA_AVAILABLE
+
+# Skipped for now: needs further investigation, this is broken on latest deltalake-written table, but works on 
+# deltalake==0.18.2
+mode skip
+
+query IIIIII
+describe select * 
+from delta_scan('./data/generated/simple_blob_table/delta_lake');
+----
+blob	BLOB	YES	NULL	NULL	NULL
+blob_part	BLOB	YES	NULL	NULL	NULL
+string	VARCHAR	YES	NULL	NULL	NULL
+
+query III
+from delta_scan('./data/generated/simple_blob_table/delta_lake') order by string;
+----
+ABCDE	ABCDE	ABCDE
+\xF0\x9F\x98\x88	\xF0\x9F\x98\x88	😈
