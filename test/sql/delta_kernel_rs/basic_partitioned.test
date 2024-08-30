@@ -21,4 +21,4 @@ c	3	3.3
 query II
 EXPLAIN FROM delta_scan('${DELTA_KERNEL_TESTS_PATH}/basic_partitioned')
 ----
-physical_plan	<REGEX>:.*EC: 6 .*
+physical_plan	<REGEX>:.*6 Rows.*

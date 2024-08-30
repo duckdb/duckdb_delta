@@ -24,7 +24,7 @@ FROM delta_scan('${DAT_PATH}/out/reader_tests/generated/basic_append/delta')
 query II
 EXPLAIN FROM delta_scan('${DAT_PATH}/out/reader_tests/generated/basic_append/delta')
 ----
-physical_plan	<REGEX>:.*EC: 5 .*
+physical_plan	<REGEX>:.*5 Rows.*
 
 query I
 SELECT count(number)
@@ -90,10 +90,10 @@ query II
 EXPLAIN FROM delta_scan('${DAT_PATH}/out/reader_tests/generated/basic_append/delta')
 WHERE number > 6
 ----
-physical_plan	<REGEX>:.*EC: 0 .*
+physical_plan	<REGEX>:.*0 Rows.*
 
 query II
 EXPLAIN FROM delta_scan('${DAT_PATH}/out/reader_tests/generated/basic_append/delta')
 WHERE number > 4
 ----
-physical_plan	<REGEX>:.*EC: 1 .*
+physical_plan	<REGEX>:.*1 Rows.*
