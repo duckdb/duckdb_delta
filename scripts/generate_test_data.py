@@ -9,9 +9,8 @@ import shutil
 import math
 import glob
 
-# BASE_PATH = os.path.dirname(os.path.realpath(__file__)) + "/../data/generated"
-BASE_PATH = '/mount/generated'
-TMP_PATH = '/mount/tmp'
+BASE_PATH = os.path.dirname(os.path.realpath(__file__)) + "/../data/generated"
+TMP_PATH = '/tmp'
 
 def delete_old_files():
     if (os.path.isdir(BASE_PATH)):
@@ -46,7 +45,7 @@ def generate_test_data_delta_rs_multi(path, init, tables, splits = 1):
         file_no = 0
         while file_no < splits:
             os.makedirs(f"{generated_path}/{table['name']}/parquet", exist_ok=True)
-            # Write DuckDB's reference data
+        # Write DuckDB's reference data
             con.sql(f"COPY ({table['query']} where rowid >= {(file_no) * tuples_per_file} and rowid < {(file_no+1) * tuples_per_file}) to '{generated_path}/{table['name']}/parquet/data_{file_no}.parquet' (FORMAT parquet)")
             file_no += 1
 
@@ -108,7 +107,7 @@ def generate_test_data_pyspark(name, current_path, input_path, delete_predicate 
     builder = SparkSession.builder.appName("MyApp") \
         .config("spark.sql.extensions", "io.delta.sql.DeltaSparkSessionExtension") \
         .config("spark.sql.catalog.spark_catalog", "org.apache.spark.sql.delta.catalog.DeltaCatalog") \
-        .config("spark.driver.memory", "150g")
+        .config("spark.driver.memory", "8g")
 
     spark = configure_spark_with_delta_pip(builder).getOrCreate()
 
@@ -142,128 +141,88 @@ def generate_test_data_pyspark(name, current_path, input_path, delete_predicate 
 # TO CLEAN, uncomment
 # delete_old_files()
 
-# ### TPCH SF1 in 10 appends
-# init = f"call dbgen(sf=0.01);"
-# tables = ["customer","lineitem","nation","orders","part","partsupp","region","supplier"]
-# queries = [f"from {x}" for x in tables]
-# tables = [{'name': x[0], 'query':x[1]} for x in zip(tables,queries)]
-# generate_test_data_delta_rs_multi("delta_rs_tpch_sf0_01", init, tables, splits=10)
-#
+### TPCH SF1
+init = "call dbgen(sf=1);"
+tables = ["customer","lineitem","nation","orders","part","partsupp","region","supplier"]
+queries = [f"from {x}" for x in tables]
+tables = [{'name': x[0], 'query':x[1]} for x in zip(tables,queries)]
+generate_test_data_delta_rs_multi("delta_rs_tpch_sf1", init, tables)
 
-### TPCDS SF1
-# init = f"call dsdgen(sf=1);"
-# tables = ["call_center","catalog_page","catalog_returns","catalog_sales","customer","customer_demographics","customer_address","date_dim","household_demographics","inventory","income_band","item","promotion","reason","ship_mode","store","store_returns","store_sales","time_dim","warehouse","web_page","web_returns","web_sales","web_site"]
-# queries = [f"from {x}" for x in tables]
-# tables = [{'name': x[0], 'query':x[1]} for x in zip(tables,queries)]
-# generate_test_data_delta_rs_multi("delta_rs_tpcds_sf1", init, tables, splits=1)
-#
-# ### TPCDS SF1
-# init = f"call dsdgen(sf=1);"
-# tables = ["call_center","catalog_page","catalog_returns","catalog_sales","customer","customer_demographics","customer_address","date_dim","household_demographics","inventory","income_band","item","promotion","reason","ship_mode","store","store_returns","store_sales","time_dim","warehouse","web_page","web_returns","web_sales","web_site"]
-# queries = [f"from {x}" for x in tables]
-# tables = [{'name': x[0], 'query':x[1]} for x in zip(tables,queries)]
-# generate_test_data_delta_rs_multi("delta_rs_tpcds_sf1", init, tables, splits=1)
+### Simple partitioned table
+query = "CREATE table test_table AS SELECT i, i%2 as part from range(0,10) tbl(i);"
+generate_test_data_delta_rs("simple_partitioned", query, "part")
 
-#
-# ### Simple partitioned table
-# query = "CREATE table test_table AS SELECT i, i%2 as part from range(0,10) tbl(i);"
-# generate_test_data_delta_rs("simple_partitioned", query, "part")
-#
-# ### Lineitem SF0.01 No partitions
-# query = "call dbgen(sf=0.01);"
-# query += "CREATE table test_table AS SELECT * as part from lineitem;"
-# generate_test_data_delta_rs("lineitem_sf0_01", query)
-#
-# ### Lineitem SF0.01 10 Partitions
-# query = "call dbgen(sf=0.01);"
-# query += "CREATE table test_table AS SELECT *, l_orderkey%10 as part from lineitem;"
-# generate_test_data_delta_rs("lineitem_sf0_01_10part", query, "part")
-#
-# ### Lineitem SF1 10 Partitions
-# query = "call dbgen(sf=1);"
-# query += "CREATE table test_table AS SELECT *, l_orderkey%10 as part from lineitem;"
-# generate_test_data_delta_rs("lineitem_sf1_10part", query, "part")
-#
-# ## Simple table with a blob as a value
-# query = "create table test_table as SELECT encode('ABCDE') as blob, encode('ABCDE') as blob_part, 'ABCDE' as string UNION ALL SELECT encode('😈') as blob, encode('😈') as blob_part, '😈' as string"
-# generate_test_data_delta_rs("simple_blob_table", query, "blob_part", add_golden_table=False)
-#
-# ## Simple partitioned table with structs
-# query = "CREATE table test_table AS SELECT {'i':i, 'j':i+1} as value, i%2 as part from range(0,10) tbl(i);"
-# generate_test_data_delta_rs("simple_partitioned_with_structs", query, "part")
-#
-# ## Partitioned table with all types we can file skip on
-# for type in ["bool", "int", "tinyint", "smallint", "bigint", "float", "double", "varchar"]:
-#     query = f"CREATE table test_table as select i::{type} as value, i::{type} as part from range(0,2) tbl(i)"
-#     generate_test_data_delta_rs(f"test_file_skipping/{type}", query, "part")
-#
-# ## Simple table with deletion vector
-# con = duckdb.connect()
-# con.query(f"COPY (SELECT i as id, ('val' || i::VARCHAR) as value  FROM range(0,1000000) tbl(i))TO '{TMP_PATH}/simple_sf1_with_dv.parquet'")
-# generate_test_data_pyspark('simple_sf1_with_dv', 'simple_sf1_with_dv', f'{TMP_PATH}/simple_sf1_with_dv.parquet', "id % 1000 = 0")
-#
-# ## Lineitem SF0.01 with deletion vector
-# con = duckdb.connect()
-# con.query(f"call dbgen(sf=0.01); COPY (from lineitem) TO '{TMP_PATH}/modified_lineitem_sf0_01.parquet'")
-# generate_test_data_pyspark('lineitem_sf0_01_with_dv', 'lineitem_sf0_01_with_dv', f'{TMP_PATH}/modified_lineitem_sf0_01.parquet', "l_shipdate = '1994-01-01'")
-#
-# ## Lineitem SF1 with deletion vector
-# con = duckdb.connect()
-# con.query(f"call dbgen(sf=1); COPY (from lineitem) TO '{TMP_PATH}/modified_lineitem_sf1.parquet'")
-# generate_test_data_pyspark('lineitem_sf1_with_dv', 'lineitem_sf1_with_dv', f'{TMP_PATH}/modified_lineitem_sf1.parquet', "l_shipdate = '1994-01-01'")
-#
-# ## TPCH SF0.01 full dataset
-# con = duckdb.connect()
-# con.query(f"call dbgen(sf=0.01); EXPORT DATABASE '{TMP_PATH}/tpch_sf0_01_export' (FORMAT parquet)")
-# for table in ["customer","lineitem","nation","orders","part","partsupp","region","supplier"]:
-#     generate_test_data_pyspark(f"tpch_sf0_01_{table}", f'tpch_sf0_01/{table}', f'{TMP_PATH}/tpch_sf0_01_export/{table}.parquet')
-#
-# ## TPCH SF1 full dataset
-# con = duckdb.connect()
-# con.query(f"call dbgen(sf=1); EXPORT DATABASE '{TMP_PATH}/tpch_sf1_export' (FORMAT parquet)")
-# for table in ["customer","lineitem","nation","orders","part","partsupp","region","supplier"]:
-#     generate_test_data_pyspark(f"tpch_sf1_{table}", f'tpch_sf1/{table}', f'{TMP_PATH}/tpch_sf1_export/{table}.parquet')
-#
-# ## TPCDS SF0.01 full dataset
-# con = duckdb.connect()
-# con.query(f"call dsdgen(sf=0.01); EXPORT DATABASE '{TMP_PATH}/tpcds_sf0_01_export' (FORMAT parquet)")
-# for table in ["call_center","catalog_page","catalog_returns","catalog_sales","customer","customer_demographics","customer_address","date_dim","household_demographics","inventory","income_band","item","promotion","reason","ship_mode","store","store_returns","store_sales","time_dim","warehouse","web_page","web_returns","web_sales","web_site"]:
-#     generate_test_data_pyspark(f"tpcds_sf0_01_{table}", f'tpcds_sf0_01/{table}', f'{TMP_PATH}/tpcds_sf0_01_export/{table}.parquet')
+### Lineitem SF0.01 No partitions
+query = "call dbgen(sf=0.01);"
+query += "CREATE table test_table AS SELECT * as part from lineitem;"
+generate_test_data_delta_rs("lineitem_sf0_01", query)
+
+### Lineitem SF0.01 10 Partitions
+query = "call dbgen(sf=0.01);"
+query += "CREATE table test_table AS SELECT *, l_orderkey%10 as part from lineitem;"
+generate_test_data_delta_rs("lineitem_sf0_01_10part", query, "part")
+
+### Lineitem SF1 10 Partitions
+query = "call dbgen(sf=1);"
+query += "CREATE table test_table AS SELECT *, l_orderkey%10 as part from lineitem;"
+generate_test_data_delta_rs("lineitem_sf1_10part", query, "part")
+
+## Simple table with a blob as a value
+query = "create table test_table as SELECT encode('ABCDE') as blob, encode('ABCDE') as blob_part, 'ABCDE' as string UNION ALL SELECT encode('😈') as blob, encode('😈') as blob_part, '😈' as string"
+generate_test_data_delta_rs("simple_blob_table", query, "blob_part", add_golden_table=False)
+
+## Simple partitioned table with structs
+query = "CREATE table test_table AS SELECT {'i':i, 'j':i+1} as value, i%2 as part from range(0,10) tbl(i);"
+generate_test_data_delta_rs("simple_partitioned_with_structs", query, "part")
+
+## Partitioned table with all types we can file skip on
+for type in ["bool", "int", "tinyint", "smallint", "bigint", "float", "double", "varchar"]:
+    query = f"CREATE table test_table as select i::{type} as value, i::{type} as part from range(0,2) tbl(i)"
+    generate_test_data_delta_rs(f"test_file_skipping/{type}", query, "part")
+
+## Simple table with deletion vector
+con = duckdb.connect()
+con.query(f"COPY (SELECT i as id, ('val' || i::VARCHAR) as value  FROM range(0,1000000) tbl(i))TO '{TMP_PATH}/simple_sf1_with_dv.parquet'")
+generate_test_data_pyspark('simple_sf1_with_dv', 'simple_sf1_with_dv', f'{TMP_PATH}/simple_sf1_with_dv.parquet', "id % 1000 = 0")
+
+## Lineitem SF0.01 with deletion vector
+con = duckdb.connect()
+con.query(f"call dbgen(sf=0.01); COPY (from lineitem) TO '{TMP_PATH}/modified_lineitem_sf0_01.parquet'")
+generate_test_data_pyspark('lineitem_sf0_01_with_dv', 'lineitem_sf0_01_with_dv', f'{TMP_PATH}/modified_lineitem_sf0_01.parquet', "l_shipdate = '1994-01-01'")
+
+## Lineitem SF1 with deletion vector
+con = duckdb.connect()
+con.query(f"call dbgen(sf=1); COPY (from lineitem) TO '{TMP_PATH}/modified_lineitem_sf1.parquet'")
+generate_test_data_pyspark('lineitem_sf1_with_dv', 'lineitem_sf1_with_dv', f'{TMP_PATH}/modified_lineitem_sf1.parquet', "l_shipdate = '1994-01-01'")
+
+## TPCH SF0.01 full dataset
+con = duckdb.connect()
+con.query(f"call dbgen(sf=0.01); EXPORT DATABASE '{TMP_PATH}/tpch_sf0_01_export' (FORMAT parquet)")
+for table in ["customer","lineitem","nation","orders","part","partsupp","region","supplier"]:
+    generate_test_data_pyspark(f"tpch_sf0_01_{table}", f'tpch_sf0_01/{table}', f'{TMP_PATH}/tpch_sf0_01_export/{table}.parquet')
+
+## TPCDS SF0.01 full dataset
+con = duckdb.connect()
+con.query(f"call dsdgen(sf=0.01); EXPORT DATABASE '{TMP_PATH}/tpcds_sf0_01_export' (FORMAT parquet)")
+for table in ["call_center","catalog_page","catalog_returns","catalog_sales","customer","customer_demographics","customer_address","date_dim","household_demographics","inventory","income_band","item","promotion","reason","ship_mode","store","store_returns","store_sales","time_dim","warehouse","web_page","web_returns","web_sales","web_site"]:
+    generate_test_data_pyspark(f"tpcds_sf0_01_{table}", f'tpcds_sf0_01/{table}', f'{TMP_PATH}/tpcds_sf0_01_export/{table}.parquet')
+
+## TPCH SF1 full dataset
+if (not os.path.isdir(BASE_PATH + '/tpch_sf1')):
+    con = duckdb.connect()
+    con.query(f"call dbgen(sf=1); EXPORT DATABASE '{TMP_PATH}/tpch_sf1_export' (FORMAT parquet)")
+    for table in ["customer","lineitem","nation","orders","part","partsupp","region","supplier"]:
+        generate_test_data_pyspark(f"tpch_sf1_{table}", f'tpch_sf1/{table}', f'{TMP_PATH}/tpch_sf1_export/{table}.parquet')
+    con.query(f"attach '{BASE_PATH + '/tpch_sf1/duckdb.db'}' as duckdb_out")
+    for table in ["customer","lineitem","nation","orders","part","partsupp","region","supplier"]:
+        con.query(f"create table duckdb_out.{table} as from {table}")
 
 ## TPCDS SF1 full dataset
-con = duckdb.connect()
-con.query(f"call dsdgen(sf=1); EXPORT DATABASE '{TMP_PATH}/tpcds_sf1_export' (FORMAT parquet)")
-for table in ["call_center","catalog_page","catalog_returns","catalog_sales","customer","customer_demographics","customer_address","date_dim","household_demographics","inventory","income_band","item","promotion","reason","ship_mode","store","store_returns","store_sales","time_dim","warehouse","web_page","web_returns","web_sales","web_site"]:
-    generate_test_data_pyspark(f"tpcds_sf1_{table}", f'tpcds_sf1/{table}', f'{TMP_PATH}/tpcds_sf1_export/{table}.parquet')
-con.query(f"attach '{BASE_PATH + '/tpcds_sf1/duckdb.db'}' as duckdb_out")
-for table in ["call_center","catalog_page","catalog_returns","catalog_sales","customer","customer_demographics","customer_address","date_dim","household_demographics","inventory","income_band","item","promotion","reason","ship_mode","store","store_returns","store_sales","time_dim","warehouse","web_page","web_returns","web_sales","web_site"]:
-    con.query(f"create table duckdb_out.{table} as from {table}")
-
-print("DONE WITH SF1")
-input()
-
-# ## TPCDS SF10 full dataset
-# con = duckdb.connect()
-# con.query(f"call dsdgen(sf=10); EXPORT DATABASE '{TMP_PATH}/tpcds_sf10_export' (FORMAT parquet)")
-# for table in ["call_center","catalog_page","catalog_returns","catalog_sales","customer","customer_demographics","customer_address","date_dim","household_demographics","inventory","income_band","item","promotion","reason","ship_mode","store","store_returns","store_sales","time_dim","warehouse","web_page","web_returns","web_sales","web_site"]:
-#     generate_test_data_pyspark(f"tpcds_sf10_{table}", f'tpcds_sf10/{table}', f'{TMP_PATH}/tpcds_sf10_export/{table}.parquet')
-# con.query(f"attach '{BASE_PATH + '/tpcds_sf10/duckdb.db'}' as duckdb_out")
-# for table in ["call_center","catalog_page","catalog_returns","catalog_sales","customer","customer_demographics","customer_address","date_dim","household_demographics","inventory","income_band","item","promotion","reason","ship_mode","store","store_returns","store_sales","time_dim","warehouse","web_page","web_returns","web_sales","web_site"]:
-#     con.query(f"create table duckdb_out.{table} as from {table}")
-#
-# print("DONE WITH SF10")
-# input()
-
-## TPCDS SF100 full dataset
-con = duckdb.connect(f'{TMP_PATH}/tpcds_sf100_duckdb_file')
-print("generating SF100")
-con.query(f"set memory_limit='140GB';")
-con.query(f"call dsdgen(sf=100);")
-print("exporting SF100")
-con.query(f"EXPORT DATABASE '{TMP_PATH}/tpcds_sf100_export' (FORMAT parquet)")
-print("Starting spark to write each table")
-for table in ["call_center","catalog_page","catalog_returns","catalog_sales","customer","customer_demographics","customer_address","date_dim","household_demographics","inventory","income_band","item","promotion","reason","ship_mode","store","store_returns","store_sales","time_dim","warehouse","web_page","web_returns","web_sales","web_site"]:
-    generate_test_data_pyspark(f"tpcds_sf100_{table}", f'tpcds_sf100/{table}', f'{TMP_PATH}/tpcds_sf100_export/{table}.parquet')
-con.query(f"attach '{BASE_PATH + '/tpcds_sf100/duckdb.db'}' as duckdb_out")
-for table in ["call_center","catalog_page","catalog_returns","catalog_sales","customer","customer_demographics","customer_address","date_dim","household_demographics","inventory","income_band","item","promotion","reason","ship_mode","store","store_returns","store_sales","time_dim","warehouse","web_page","web_returns","web_sales","web_site"]:
-    con.query(f"create table duckdb_out.{table} as from {table}")
+if (not os.path.isdir(BASE_PATH + '/tpcds_sf1')):
+    con = duckdb.connect()
+    con.query(f"call dsdgen(sf=1); EXPORT DATABASE '{TMP_PATH}/tpcds_sf1_export' (FORMAT parquet)")
+    for table in ["call_center","catalog_page","catalog_returns","catalog_sales","customer","customer_demographics","customer_address","date_dim","household_demographics","inventory","income_band","item","promotion","reason","ship_mode","store","store_returns","store_sales","time_dim","warehouse","web_page","web_returns","web_sales","web_site"]:
+        generate_test_data_pyspark(f"tpcds_sf1_{table}", f'tpcds_sf1/{table}', f'{TMP_PATH}/tpcds_sf1_export/{table}.parquet')
+    con.query(f"attach '{BASE_PATH + '/tpcds_sf1/duckdb.db'}' as duckdb_out")
+    for table in ["call_center","catalog_page","catalog_returns","catalog_sales","customer","customer_demographics","customer_address","date_dim","household_demographics","inventory","income_band","item","promotion","reason","ship_mode","store","store_returns","store_sales","time_dim","warehouse","web_page","web_returns","web_sales","web_site"]:
+        con.query(f"create table duckdb_out.{table} as from {table}")

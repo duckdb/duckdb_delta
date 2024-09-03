@@ -13,7 +13,7 @@ require parquet
 require tpcds
 
 run
-attach '/mount/delta_benchmarking/tpcds_sf1_pyspark/duckdb.db' as tpcds;
+attach './data/generated/tpcds_sf1/duckdb.db' as tpcds;
 use tpcds;
 pragma tpcds(${QUERY_NUMBER})
 

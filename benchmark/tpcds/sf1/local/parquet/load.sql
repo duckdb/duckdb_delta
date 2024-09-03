@@ -1,4 +1,4 @@
-SET VARIABLE parquet_path = '/mount/delta_benchmarking/tpcds_sf1_pyspark';
+SET VARIABLE parquet_path = './data/generated/tpcds_sf1';
 
 create view call_center as from parquet_scan(getvariable('parquet_path') || '/call_center/parquet/**/*.parquet');
 create view catalog_page as from parquet_scan(getvariable('parquet_path') || '/catalog_page/parquet/**/*.parquet');

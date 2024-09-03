@@ -1,4 +1,4 @@
-SET VARIABLE delta_path = '/mount/delta_benchmarking/tpcds_sf1_pyspark';
+SET VARIABLE delta_path = './data/generated/tpcds_sf1';
 
 create view call_center as from delta_scan(getvariable('delta_path') || '/call_center/delta_lake');
 create view catalog_page as from delta_scan(getvariable('delta_path') || '/catalog_page/delta_lake');

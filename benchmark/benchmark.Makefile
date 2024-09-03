@@ -8,7 +8,6 @@ ifeq ("$(IO_MODE)a", "a")
     IO_MODE:=local
 endif
 
-
 bench-output-dir:
 	mkdir -p benchmark_results
 
@@ -18,37 +17,23 @@ clean_benchmark:
 plot:
 	python3 scripts/plot.py
 
-
 ############### BENCHMARK TARGETS ###############
 
 ###
-# TPCH LOCAL
+# TPCH
 ###
 
 # TPCH SF1 on delta table
 bench-run-tpch-sf1-delta: bench-output-dir
-	./build/release/benchmark/benchmark_runner --root-dir './' 'benchmark/tpch/sf1/delta/$(BENCHMARK_PATTERN)' 2>&1 | tee benchmark_results/tpch-sf1-delta.csv
+	./build/release/benchmark/benchmark_runner --root-dir './' 'benchmark/tpch/sf1/local/delta/$(BENCHMARK_PATTERN)' 2>&1 | tee benchmark_results/tpch-sf1-delta.csv
 # TPCH SF1 on parquet files
 bench-run-tpch-sf1-parquet: bench-output-dir
-	./build/release/benchmark/benchmark_runner 'benchmark/tpch/sf1/parquet/$(BENCHMARK_PATTERN)' 2>&1 | tee benchmark_results/tpch-sf1-parquet.csv
+	./build/release/benchmark/benchmark_runner 'benchmark/tpch/sf1-parquet/$(BENCHMARK_PATTERN)' 2>&1 | tee benchmark_results/tpch-sf1-parquet.csv
 # TPCH SF1 on duckdb file
 bench-run-tpch-sf1-duckdb: bench-output-dir
-	./build/release/benchmark/benchmark_runner 'benchmark/tpch/sf1/$(BENCHMARK_PATTERN)' 2>&1 | tee benchmark_results/tpch-sf1-duckdb.csv
-# COMPARES TPCH SF1 on parquet file vs on delta files
+	./build/release/benchmark/benchmark_runner --root-dir './' 'benchmark/tpch/sf1/local/duckdb/$(BENCHMARK_PATTERN)' 2>&1 | tee benchmark_results/tpch-sf1-duckdb.csv
+# COMPARES TPCH SF1 on parquet file vs on delta files vs on duckdb files
 bench-run-tpch-sf1: bench-run-tpch-sf1-delta bench-run-tpch-sf1-parquet
-
-###
-# TPCH REMOTE
-###
-
-# TPCH on remote delta table (set BENCHMARK_DATA_S3_LINEITEM_SF1)
-bench-run-tpch-sf1-remote-delta: bench-output-dir
-	./build/release/benchmark/benchmark_runner --root-dir './' 'benchmark/tpch/sf1/delta-remote/$(BENCHMARK_PATTERN)' 2>&1 | tee benchmark_results/tpch-sf1-remote-delta.csv
-# TPCH on remote parquet table (set BENCHMARK_DATA_S3_LINEITEM_SF1)
-bench-run-tpch-sf1-remote-parquet: bench-output-dir
-	./build/release/benchmark/benchmark_runner --root-dir './' 'benchmark/tpch/sf1/parquet-remote/$(BENCHMARK_PATTERN)' 2>&1 | tee benchmark_results/tpch-sf1-remote-parquet.csv
-# COMPARES TPCH SF1 on parquet file vs on delta files
-bench-run-tpch-sf1-remote: bench-run-tpch-sf1-remote-parquet bench-run-tpch-sf1-remote-delta
 
 ###
 # TPCDS
