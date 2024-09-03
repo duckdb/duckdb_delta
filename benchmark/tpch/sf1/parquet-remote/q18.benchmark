@@ -1,0 +1,7 @@
+# name: benchmark/tpch/sf1-delta/q18.benchmark
+# description: Run query 18 from the TPC-H benchmark
+# group: [sf1-parquet]
+
+template benchmark/tpch/sf1/parquet-remote/tpch_sf1_delta.benchmark.in
+QUERY_NUMBER=18
+QUERY_NUMBER_PADDED=18

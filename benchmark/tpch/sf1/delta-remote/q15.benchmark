@@ -1,0 +1,7 @@
+# name: benchmark/tpch/sf1-delta/q15.benchmark
+# description: Run query 15 from the TPC-H benchmark
+# group: [sf1-parquet]
+
+template benchmark/tpch/sf1/delta-remote/tpch_sf1_delta.benchmark.in
+QUERY_NUMBER=15
+QUERY_NUMBER_PADDED=15

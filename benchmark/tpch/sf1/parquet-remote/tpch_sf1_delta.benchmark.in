@@ -1,0 +1,19 @@
+# name: ${FILE_PATH}
+# description: ${DESCRIPTION}
+# group: [sf1]
+
+name Q${QUERY_NUMBER_PADDED}
+group tpch
+subgroup sf1
+
+require delta
+
+require parquet
+
+require httpfs
+
+load benchmark/tpch/sf1/parquet-remote/load.sql
+
+run duckdb/extension/tpch/dbgen/queries/q${QUERY_NUMBER_PADDED}.sql
+
+result duckdb/extension/tpch/dbgen/answers/sf0.01/q${QUERY_NUMBER_PADDED}.csv

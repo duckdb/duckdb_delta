@@ -1,0 +1,31 @@
+# name: ${FILE_PATH}
+# description: ${DESCRIPTION}
+# group: [tpcds-sf1]
+
+name DSQ${QUERY_NUMBER_PADDED}
+group tpcds
+subgroup sf1
+
+require delta
+
+require parquet
+
+require tpcds
+
+require httpfs
+
+require aws
+
+load
+CREATE SECRET IF NOT EXISTS s1 (type s3, provider credential_chain);
+
+run
+attach 's3://test-bucket-ceiveran/delta_benchmarking/tpcds_sf1_pyspark/duckdb.db' as tpcds (READONLY 1);
+use tpcds;
+pragma tpcds(${QUERY_NUMBER})
+
+cleanup
+use memory;
+detach tpcds;
+
+result duckdb/extension/tpcds/dsdgen/answers/sf1/${QUERY_NUMBER_PADDED}.csv

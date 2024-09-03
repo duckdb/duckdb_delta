@@ -1,0 +1,7 @@
+# name: benchmark/tpch/sf1-delta/q02.benchmark
+# description: Run query 02 from the TPC-H benchmark
+# group: [sf1-parquet]
+
+template benchmark/tpch/sf1/parquet-remote/tpch_sf1_delta.benchmark.in
+QUERY_NUMBER=2
+QUERY_NUMBER_PADDED=02
