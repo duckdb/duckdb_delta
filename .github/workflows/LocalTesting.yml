@@ -257,16 +257,21 @@ jobs:
           echo "OPENSSL_DIR=`pwd`/build/release/vcpkg_installed/x64-linux" >> $GITHUB_ENV
           echo "OPENSSL_USE_STATIC_LIBS=true" >> $GITHUB_ENV
 
-      - name: Build
+      - name: Build current release
         shell: bash
         run: |
           make
+          rm -rf build/release/rust
+
+      - name: Build ${{ env.BASE_BRANCH }} branch
+        shell: bash
+        run: | 
           git clone --branch ${{ env.BASE_BRANCH }} https://github.com/duckdb/duckdb_delta.git --depth=1 
           cd duckdb_delta
           git submodule init
           git submodule update
           make
-          cd ..
+          rm -rf build/release/rust
 
       - name: Generate test data
         shell: bash

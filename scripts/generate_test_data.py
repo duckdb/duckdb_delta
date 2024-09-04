@@ -142,11 +142,11 @@ def generate_test_data_pyspark(name, current_path, input_path, delete_predicate 
 # delete_old_files()
 
 ### TPCH SF1
-init = "call dbgen(sf=1);"
+init = "call dbgen(sf=0.01);"
 tables = ["customer","lineitem","nation","orders","part","partsupp","region","supplier"]
 queries = [f"from {x}" for x in tables]
 tables = [{'name': x[0], 'query':x[1]} for x in zip(tables,queries)]
-generate_test_data_delta_rs_multi("delta_rs_tpch_sf1", init, tables)
+generate_test_data_delta_rs_multi("delta_rs_tpch_sf0_01", init, tables)
 
 ### Simple partitioned table
 query = "CREATE table test_table AS SELECT i, i%2 as part from range(0,10) tbl(i);"
@@ -161,11 +161,6 @@ generate_test_data_delta_rs("lineitem_sf0_01", query)
 query = "call dbgen(sf=0.01);"
 query += "CREATE table test_table AS SELECT *, l_orderkey%10 as part from lineitem;"
 generate_test_data_delta_rs("lineitem_sf0_01_10part", query, "part")
-
-### Lineitem SF1 10 Partitions
-query = "call dbgen(sf=1);"
-query += "CREATE table test_table AS SELECT *, l_orderkey%10 as part from lineitem;"
-generate_test_data_delta_rs("lineitem_sf1_10part", query, "part")
 
 ## Simple table with a blob as a value
 query = "create table test_table as SELECT encode('ABCDE') as blob, encode('ABCDE') as blob_part, 'ABCDE' as string UNION ALL SELECT encode('😈') as blob, encode('😈') as blob_part, '😈' as string"
