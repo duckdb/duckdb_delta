@@ -107,7 +107,8 @@ def generate_test_data_pyspark(name, current_path, input_path, delete_predicate 
     builder = SparkSession.builder.appName("MyApp") \
         .config("spark.sql.extensions", "io.delta.sql.DeltaSparkSessionExtension") \
         .config("spark.sql.catalog.spark_catalog", "org.apache.spark.sql.delta.catalog.DeltaCatalog") \
-        .config("spark.driver.memory", "8g")
+        .config("spark.driver.memory", "8g")\
+        .config('spark.driver.host','127.0.0.1')
 
     spark = configure_spark_with_delta_pip(builder).getOrCreate()
 
