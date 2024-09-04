@@ -27,5 +27,5 @@ include benchmark/benchmark.Makefile
 
 # Generate some test data to test with
 generate-data:
-	python3 -m pip install delta-spark duckdb pandas deltalake pyspark delta
+	python3 -m pip install delta-spark duckdb pandas deltalake pyspark
 	python3 scripts/generate_test_data.py

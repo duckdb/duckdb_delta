@@ -1,7 +1,0 @@
-# name: benchmark/tpch/sf1-delta/q11.benchmark
-# description: Run query 11 from the TPC-H benchmark
-# group: [sf1-parquet]
-
-template benchmark/tpch/sf1-delta/tpch_sf1_delta.benchmark.in
-QUERY_NUMBER=11
-QUERY_NUMBER_PADDED=11
