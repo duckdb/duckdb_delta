@@ -28,6 +28,7 @@ struct DeltaFileMetaData {
 
     idx_t delta_snapshot_version = DConstants::INVALID_INDEX;
     idx_t file_number = DConstants::INVALID_INDEX;
+    idx_t cardinality = DConstants::INVALID_INDEX;
     ffi::KernelBoolSlice selection_vector = {nullptr, 0};
     case_insensitive_map_t<string> partition_map;
 };
@@ -43,11 +44,13 @@ struct DeltaSnapshot : public MultiFileList {
 public:
     void Bind(vector<LogicalType> &return_types, vector<string> &names);
     unique_ptr<MultiFileList> ComplexFilterPushdown(ClientContext &context,
-                                                            const MultiFileReaderOptions &options, LogicalGet &get,
+                                                            const MultiFileReaderOptions &options, MultiFilePushdownInfo &info,
                                                             vector<unique_ptr<Expression>> &filters) override;
     vector<string> GetAllFiles() override;
     FileExpandResult GetExpandResult() override;
     idx_t GetTotalFileCount() override;
+
+    unique_ptr<NodeStatistics> GetCardinality(ClientContext &context) override;
 
 protected:
     //! Get the i-th expanded file

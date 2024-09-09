@@ -7,6 +7,9 @@ defaults:
   run:
     shell: bash
 
+env:
+  BASE_BRANCH: ${{ github.base_ref || (endsWith(github.ref, '_feature') && 'feature' || 'main') }}
+
 jobs:
   azurite-tests-linux:
     name: Azurite (local azure test server) tests (Linux)
@@ -117,6 +120,12 @@ jobs:
         with:
           vcpkgGitCommitId: a1a1cbc975abf909a6c8985a6a2b8fe20bbd9bd6
 
+      - name: Configure OpenSSL for Rust
+        run: |
+          echo "OPENSSL_ROOT_DIR=`pwd`/build/release/vcpkg_installed/x64-linux" >> $GITHUB_ENV
+          echo "OPENSSL_DIR=`pwd`/build/release/vcpkg_installed/x64-linux" >> $GITHUB_ENV
+          echo "OPENSSL_USE_STATIC_LIBS=true" >> $GITHUB_ENV
+
       - name: Build
         shell: bash
         run: make
@@ -194,6 +203,12 @@ jobs:
         with:
           vcpkgGitCommitId: a1a1cbc975abf909a6c8985a6a2b8fe20bbd9bd6
 
+      - name: Configure OpenSSL for Rust
+        run: |
+          echo "OPENSSL_ROOT_DIR=`pwd`/build/release/vcpkg_installed/x64-linux" >> $GITHUB_ENV
+          echo "OPENSSL_DIR=`pwd`/build/release/vcpkg_installed/x64-linux" >> $GITHUB_ENV
+          echo "OPENSSL_USE_STATIC_LIBS=true" >> $GITHUB_ENV
+
       - name: Build
         shell: bash
         run: make generate-data
@@ -202,3 +217,80 @@ jobs:
         shell: bash
         run: |
           GENERATED_DATA_AVAILABLE=1 make test
+
+  regression-test-benchmark-runner:
+    name: Performance Regression Tests
+    runs-on: ubuntu-latest
+    env:
+      GEN: ninja
+      BUILD_BENCHMARK: 1
+      VCPKG_TARGET_TRIPLET: x64-linux
+      VCPKG_TOOLCHAIN_PATH: ${{ github.workspace }}/vcpkg/scripts/buildsystems/vcpkg.cmake
+
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+          submodules: 'true'
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+
+      - name: Install
+        shell: bash
+        run: sudo apt-get update -y -qq && sudo apt-get install -y -qq ninja-build && pip install requests
+
+      - name: Setup Ccache
+        uses: hendrikmuhs/ccache-action@main
+        with:
+          key: ${{ github.job }}
+
+      - name: Setup vcpkg
+        uses: lukka/run-vcpkg@v11.1
+        with:
+          vcpkgGitCommitId: a1a1cbc975abf909a6c8985a6a2b8fe20bbd9bd6
+
+      - name: Configure OpenSSL for Rust
+        run: |
+          echo "OPENSSL_ROOT_DIR=`pwd`/build/release/vcpkg_installed/x64-linux" >> $GITHUB_ENV
+          echo "OPENSSL_DIR=`pwd`/build/release/vcpkg_installed/x64-linux" >> $GITHUB_ENV
+          echo "OPENSSL_USE_STATIC_LIBS=true" >> $GITHUB_ENV
+
+      - name: Build current release
+        shell: bash
+        run: |
+          make
+          rm -rf build/release/rust
+
+      - name: Build ${{ env.BASE_BRANCH }} branch
+        shell: bash
+        run: | 
+          git clone --branch ${{ env.BASE_BRANCH }} https://github.com/duckdb/duckdb_delta.git --depth=1 
+          cd duckdb_delta
+          git submodule init
+          git submodule update
+          make
+          rm -rf build/release/rust
+
+      - name: Generate test data
+        shell: bash
+        run: make generate-data
+
+      - name: Regression Test TPC-H
+        if: always()
+        shell: bash
+        run: |
+          python3 ./scripts/regression_test_runner.py --old=duckdb_delta/build/release/benchmark/benchmark_runner --new=build/release/benchmark/benchmark_runner --benchmarks=.github/regression/tpch_sf1_local.csv --verbose --threads=2 --root-dir=.
+
+      - name: Regression Test TPC-DS
+        if: always()
+        shell: bash
+        run: |
+          python ./scripts/regression_test_runner.py --old=duckdb_delta/build/release/benchmark/benchmark_runner --new=build/release/benchmark/benchmark_runner --benchmarks=.github/regression/tpcds_sf1_local.csv --verbose --threads=2 --root-dir=.
+
+      - name: Test benchmark makefile
+        shell: bash
+        run: |
+          make bench-run-tpch-sf1
+          make bench-run-tpcds-sf1

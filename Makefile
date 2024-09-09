@@ -11,6 +11,9 @@ test_release: export DAT_PATH=./build/release/rust/src/delta_kernel/acceptance/t
 test_debug: export DELTA_KERNEL_TESTS_PATH=./build/debug/rust/src/delta_kernel/kernel/tests/data
 test_debug: export DAT_PATH=./build/debug/rust/src/delta_kernel/acceptance/tests/dat
 
+# Core extensions that we need for testing
+CORE_EXTENSIONS='tpcds;tpch;aws;azure;httpfs'
+
 # Set this flag during building to enable the benchmark runner
 ifeq (${BUILD_BENCHMARK}, 1)
 	TOOLCHAIN_FLAGS:=${TOOLCHAIN_FLAGS} -DBUILD_BENCHMARKS=1
@@ -24,5 +27,5 @@ include benchmark/benchmark.Makefile
 
 # Generate some test data to test with
 generate-data:
-	python3 -m pip install delta-spark duckdb pandas deltalake pyspark delta
+	python3 -m pip install delta-spark duckdb pandas deltalake pyspark
 	python3 scripts/generate_test_data.py

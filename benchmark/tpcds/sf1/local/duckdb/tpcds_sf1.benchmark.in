@@ -1,0 +1,24 @@
+# name: ${FILE_PATH}
+# description: ${DESCRIPTION}
+# group: [tpcds-sf1]
+
+name DSQ${QUERY_NUMBER_PADDED}
+group tpcds
+subgroup sf1
+
+require delta
+
+require parquet
+
+require tpcds
+
+run
+attach './data/generated/tpcds_sf1/duckdb.db' as tpcds;
+use tpcds;
+pragma tpcds(${QUERY_NUMBER})
+
+cleanup
+use memory;
+detach tpcds;
+
+result duckdb/extension/tpcds/dsdgen/answers/sf1/${QUERY_NUMBER_PADDED}.csv

@@ -1,0 +1,7 @@
+# name: benchmark/tpcds/sf1/remote/delta/q11.benchmark
+# description: Run query 11 from the TPC-DS benchmark
+# group: [sf1]
+
+template benchmark/tpcds/sf1/remote/delta/tpcds_sf1.benchmark.in
+QUERY_NUMBER=11
+QUERY_NUMBER_PADDED=11

@@ -7,7 +7,7 @@
     "zlib",
     {
       "name": "aws-sdk-cpp",
-      "features": [ "sts" ]
+      "features": [ "sts", "sso" ]
     }
   ]
 }

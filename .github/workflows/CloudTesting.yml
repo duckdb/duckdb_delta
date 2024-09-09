@@ -41,6 +41,12 @@ jobs:
         with:
           vcpkgGitCommitId: a1a1cbc975abf909a6c8985a6a2b8fe20bbd9bd6
 
+      - name: Configure OpenSSL for Rust
+        run: |
+          echo "OPENSSL_ROOT_DIR=`pwd`/build/release/vcpkg_installed/x64-linux" >> $GITHUB_ENV
+          echo "OPENSSL_DIR=`pwd`/build/release/vcpkg_installed/x64-linux" >> $GITHUB_ENV
+          echo "OPENSSL_USE_STATIC_LIBS=true" >> $GITHUB_ENV
+
       - name: Setup Rust
         uses: dtolnay/rust-toolchain@stable
 
@@ -57,7 +63,7 @@ jobs:
           AZURE_TENANT_ID: ${{secrets.AZURE_TENANT_ID}}
           AZURE_STORAGE_ACCOUNT: ${{secrets.AZURE_STORAGE_ACCOUNT}}
         run: |
-          python3 duckdb/scripts/run_tests_one_by_one.py ./build/release/test/unittest "*test/sql/cloud/*"
+          python3 duckdb/scripts/run_tests_one_by_one.py ./build/release/test/unittest `pwd`/test/sql/cloud/*
 
       - name: Test with SPN logged in in azure-cli
         env:
@@ -65,7 +71,7 @@ jobs:
           DUCKDB_AZ_CLI_LOGGED_IN: 1
         run: |
           az login --service-principal -u ${{secrets.AZURE_CLIENT_ID}} -p ${{secrets.AZURE_CLIENT_SECRET}} --tenant ${{secrets.AZURE_TENANT_ID}}
-          python3 duckdb/scripts/run_tests_one_by_one.py ./build/release/test/unittest "*test/sql/cloud/*"
+          python3 duckdb/scripts/run_tests_one_by_one.py ./build/release/test/unittest `pwd`/test/sql/cloud/*
 
       - name: Log out azure-cli
         if: always()
@@ -77,4 +83,4 @@ jobs:
           AZURE_STORAGE_ACCOUNT: ${{secrets.AZURE_STORAGE_ACCOUNT}}
           DUCKDB_AZURE_PUBLIC_CONTAINER_AVAILABLE: 1
         run: |
-          python3 duckdb/scripts/run_tests_one_by_one.py ./build/release/test/unittest "*test/sql/cloud/*"
+          python3 duckdb/scripts/run_tests_one_by_one.py ./build/release/test/unittest `pwd`/test/sql/cloud/*
