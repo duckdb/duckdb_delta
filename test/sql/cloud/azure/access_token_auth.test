@@ -4,6 +4,8 @@
 
 require azure
 
+require parquet
+
 require delta
 
 require-env AZURE_ACCESS_TOKEN
