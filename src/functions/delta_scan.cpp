@@ -283,8 +283,15 @@ static ffi::EngineBuilder* CreateBuilder(ClientContext &context, const string &p
         secret_reader.TryGetSecretKey("chain", chain);
 
         auto provider = kv_secret.GetProvider();
-
-        if (provider == "credential_chain") {
+        if (provider == "access_token") {
+            // Authentication option 0: https://docs.rs/object_store/latest/object_store/azure/enum.AzureConfigKey.html#variant.Token
+            string access_token;
+            secret_reader.TryGetSecretKey("access_token", access_token);
+            if (access_token.empty()) {
+                throw InvalidInputException("No access_token value not found in secret provider!");
+            }
+            ffi::set_builder_option(builder, KernelUtils::ToDeltaString("bearer_token"), KernelUtils::ToDeltaString(access_token));
+        } else if (provider == "credential_chain") {
             // Authentication option 1a: using the cli authentication
             if (chain.find("cli") != std::string::npos) {
                 ffi::set_builder_option(builder, KernelUtils::ToDeltaString("use_azure_cli"), KernelUtils::ToDeltaString("true"));

@@ -1,0 +1,46 @@
+# name: test/sql/cloud/azure/access_token_auth.test
+# description: test access-token authentication
+# group: [azure]
+
+require azure
+
+require parquet
+
+require delta
+
+require-env AZURE_ACCESS_TOKEN
+
+require-env AZURE_STORAGE_ACCOUNT
+
+statement ok
+set allow_persistent_secrets=false
+
+statement error
+SELECT count(*) FROM delta_scan('azure://delta-testing-private/dat/all_primitive_types/delta');
+----
+IO Error
+
+statement ok
+CREATE OR REPLACE SECRET az1 (
+    TYPE AZURE,
+    PROVIDER ACCESS_TOKEN,
+    ACCOUNT_NAME '${AZURE_STORAGE_ACCOUNT}'
+)
+
+statement error
+SELECT count(*) FROM delta_scan('azure://delta-testing-private/dat/all_primitive_types/delta');
+----
+Invalid Input Error: No access_token value not found in secret provider!
+
+statement ok
+CREATE OR REPLACE SECRET az1 (
+    TYPE AZURE,
+    PROVIDER ACCESS_TOKEN,
+    ACCESS_TOKEN '${AZURE_ACCESS_TOKEN}',
+    ACCOUNT_NAME '${AZURE_STORAGE_ACCOUNT}'
+)
+
+query I
+SELECT count(*) FROM delta_scan('azure://delta-testing-private/dat/all_primitive_types/delta');
+----
+5
