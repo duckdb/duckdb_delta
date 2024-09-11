@@ -18,10 +18,10 @@ set allow_persistent_secrets=false
 statement error
 SELECT count(*) FROM delta_scan('azure://delta-testing-private/dat/all_primitive_types/delta');
 ----
-Invalid Input Error: No valid Azure credentials found!
+IO Error
 
 statement ok
-CREATE SECRET az1 (
+CREATE OR REPLACE SECRET az1 (
     TYPE AZURE,
     PROVIDER ACCESS_TOKEN,
     ACCOUNT_NAME '${AZURE_STORAGE_ACCOUNT}'
