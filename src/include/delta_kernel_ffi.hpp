@@ -390,6 +390,21 @@ using CScanCallback = void(*)(NullableCvoid engine_context,
                               const DvInfo *dv_info,
                               const CStringMap *partition_map);
 
+    // This trickery is from https://github.com/mozilla/cbindgen/issues/402#issuecomment-578680163
+struct im_an_unused_struct_that_tricks_msvc_into_compilation {
+    ExternResult<KernelBoolSlice> field;
+    ExternResult<bool> field2;
+    ExternResult<EngineBuilder*> field3;
+    ExternResult<Handle<SharedExternEngine>> field4;
+    ExternResult<Handle<SharedSnapshot>> field5;
+    ExternResult<uintptr_t> field6;
+    ExternResult<ArrowFFIData*> field7;
+    ExternResult<Handle<SharedScanDataIterator>> field8;
+    ExternResult<Handle<SharedScan>> field9;
+    ExternResult<Handle<ExclusiveFileReadResultIterator>> field10;
+    ExternResult<KernelRowIndexArray> field11;
+};
+
 extern "C" {
 
 /// # Safety
