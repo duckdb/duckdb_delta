@@ -50,6 +50,7 @@ enum class KernelError {
   InvalidDecimalError,
   InvalidStructDataError,
   InternalError,
+  InvalidExpression,
 };
 
 struct CStringMap;
@@ -90,6 +91,13 @@ struct StringSliceIterator;
 /// to free that slice, by calling [super::free_bool_slice] exactly once.
 struct KernelBoolSlice {
   bool *ptr;
+  uintptr_t len;
+};
+
+/// An owned slice of u64 row indexes allocated by the kernel. The engine is responsible for
+/// freeing this slice by calling [super::free_row_indexes] once.
+struct KernelRowIndexArray {
+  uint64_t *ptr;
   uintptr_t len;
 };
 
@@ -382,26 +390,17 @@ using CScanCallback = void(*)(NullableCvoid engine_context,
                               const DvInfo *dv_info,
                               const CStringMap *partition_map);
 
-// This trickery is from https://github.com/mozilla/cbindgen/issues/402#issuecomment-578680163
-struct im_an_unused_struct_that_tricks_msvc_into_compilation {
-    ExternResult<KernelBoolSlice> field;
-    ExternResult<bool> field2;
-    ExternResult<EngineBuilder*> field3;
-    ExternResult<Handle<SharedExternEngine>> field4;
-    ExternResult<Handle<SharedSnapshot>> field5;
-    ExternResult<uintptr_t> field6;
-    ExternResult<ArrowFFIData*> field7;
-    ExternResult<Handle<SharedScanDataIterator>> field8;
-    ExternResult<Handle<SharedScan>> field9;
-    ExternResult<Handle<ExclusiveFileReadResultIterator>> field10;
-};
-
 extern "C" {
 
 /// # Safety
 ///
 /// Caller is responsible for passing a valid handle.
 void free_bool_slice(KernelBoolSlice slice);
+
+/// # Safety
+///
+/// Caller is responsible for passing a valid handle.
+void free_row_indexes(KernelRowIndexArray slice);
 
 /// Drop an `ExclusiveEngineData`.
 ///
@@ -705,6 +704,14 @@ ExternResult<KernelBoolSlice> selection_vector_from_dv(const DvInfo *dv_info,
                                                        Handle<SharedExternEngine> engine,
                                                        Handle<SharedGlobalScanState> state);
 
+/// Get a vector of row indexes out of a [`DvInfo`] struct
+///
+/// # Safety
+/// Engine is responsible for providing valid pointers for each argument
+ExternResult<KernelRowIndexArray> row_indexes_from_dv(const DvInfo *dv_info,
+                                                      Handle<SharedExternEngine> engine,
+                                                      Handle<SharedGlobalScanState> state);
+
 /// Shim for ffi to call visit_scan_data. This will generally be called when iterating through scan
 /// data which provides the data handle and selection vector as each element in the iterator.
 ///
@@ -715,6 +722,6 @@ void visit_scan_data(Handle<ExclusiveEngineData> data,
                      NullableCvoid engine_context,
                      CScanCallback callback);
 
-} // extern "C"
+}  // extern "C"
 
-} // namespace ffi
+}  // namespace ffi
