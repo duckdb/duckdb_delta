@@ -63,7 +63,9 @@ static void visit_callback(ffi::NullableCvoid engine_context, struct ffi::Kernel
     // Initialize the file metadata
     context->metadata.back()->delta_snapshot_version = context->version;
     context->metadata.back()->file_number = context->resolved_files.size() - 1;
-    context->metadata.back()->cardinality = stats->num_records;
+    if (stats) {
+        context->metadata.back()->cardinality = stats->num_records;
+    }
 
     // Fetch the deletion vector
     auto selection_vector_res = ffi::selection_vector_from_dv(dv_info, context->extern_engine.get(), context->global_state.get());
@@ -510,11 +512,19 @@ unique_ptr<NodeStatistics> DeltaSnapshot::GetCardinality(ClientContext &context)
     }
 
     idx_t total_tuple_count = 0;
+    bool have_any_stats = false;
     for (auto &metadatum : metadata) {
-        total_tuple_count += metadatum->cardinality;
+        if (metadatum->cardinality != DConstants::INVALID_INDEX) {
+            have_any_stats = true;
+            total_tuple_count += metadatum->cardinality;
+        }
     }
 
-    return make_uniq<NodeStatistics>(total_tuple_count,total_tuple_count);
+    if (have_any_stats) {
+        return make_uniq<NodeStatistics>(total_tuple_count,total_tuple_count);
+    }
+
+    return nullptr;
 }
 
 unique_ptr<MultiFileReader> DeltaMultiFileReader::CreateInstance() {
