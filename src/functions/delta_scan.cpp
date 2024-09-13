@@ -284,6 +284,10 @@ static ffi::EngineBuilder* CreateBuilder(ClientContext &context, const string &p
         secret_reader.TryGetSecretKey("tenant_id", tenant_id);
         secret_reader.TryGetSecretKey("chain", chain);
 
+        if (!account_name.empty() && account_name == "onelake") {
+            ffi::set_builder_option(builder, KernelUtils::ToDeltaString("use_fabric_endpoint"), KernelUtils::ToDeltaString("true"));
+        }
+
         auto provider = kv_secret.GetProvider();
         if (provider == "access_token") {
             // Authentication option 0: https://docs.rs/object_store/latest/object_store/azure/enum.AzureConfigKey.html#variant.Token
@@ -344,8 +348,6 @@ static ffi::EngineBuilder* CreateBuilder(ClientContext &context, const string &p
         }
         if (!endpoint.empty()) {
             ffi::set_builder_option(builder, KernelUtils::ToDeltaString("azure_endpoint"), KernelUtils::ToDeltaString(endpoint));
-        } else {
-            ffi::set_builder_option(builder, KernelUtils::ToDeltaString("azure_endpoint"), KernelUtils::ToDeltaString("https://" + account_name + ".blob.core.windows.net/"));
         }
         ffi::set_builder_option(builder, KernelUtils::ToDeltaString("container_name"), KernelUtils::ToDeltaString(bucket));
     }
