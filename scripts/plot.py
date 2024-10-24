@@ -5,6 +5,7 @@ import argparse
 parser = argparse.ArgumentParser(description='Plot the results in ./benchmark_results')
 parser.add_argument('-p','--pattern', help='Pattern to match result csv files to', required=False, default='*.csv')
 parser.add_argument('-w','--width', help='Width of graph, adjust to fit data', required=False, default=20)
+parser.add_argument('-n','--name', help='name of the graph ', required=False, default='')
 args = vars(parser.parse_args())
 
 ### Parse Query Results
@@ -34,5 +35,5 @@ import matplotlib.pyplot as plt
 import numpy as np
 
 plt.rcParams["figure.figsize"] = [int(args['width']), 5]
-fig = benchmark_results.pivot(index='benchmark', columns='config', values='timing').plot(kind='bar', title='', ylabel='runtime [s]').get_figure()
+fig = benchmark_results.pivot(index='benchmark', columns='config', values='timing').plot(kind='bar', title=args['name'], ylabel='runtime [s]').get_figure()
 fig.savefig('benchmark_results/result.png')

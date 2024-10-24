@@ -1,0 +1,7 @@
+# name: benchmark/tpch/sf1/local/delta_attach/q14.benchmark
+# description: Run query 14 from the TPC-H benchmark
+# group: [sf1-parquet]
+
+template benchmark/tpch/sf1/local/delta_attach/tpch_sf1_delta.benchmark.in
+QUERY_NUMBER=14
+QUERY_NUMBER_PADDED=14

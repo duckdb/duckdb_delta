@@ -15,7 +15,13 @@ set(EXTENSION_SOURCES
         src/delta_extension.cpp
         src/delta_functions.cpp
         src/delta_utils.cpp
-        src/functions/delta_scan.cpp)
+        src/functions/delta_scan.cpp
+        src/storage/delta_catalog.cpp
+        src/storage/delta_schema_entry.cpp
+        src/storage/delta_table_entry.cpp
+        src/storage/delta_transaction.cpp
+        src/storage/delta_transaction_manager.cpp
+)
 
 ### Custom config
 # TODO: figure out if we really need this?

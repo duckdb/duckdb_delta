@@ -2,6 +2,8 @@
 
 #include "duckdb.hpp"
 
+#define DEFAULT_DELTA_TABLE "delta_table"
+
 namespace duckdb {
 
 class DeltaExtension : public Extension {

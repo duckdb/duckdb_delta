@@ -11,5 +11,5 @@ test/python/__pycache__/
 data/generated
 __azurite*__.json
 __blobstorage__
-.venv
+venv
 .vscode

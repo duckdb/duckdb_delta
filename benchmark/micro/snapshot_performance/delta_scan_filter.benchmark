@@ -1,0 +1,16 @@
+# name: benchmark/micro/snapshot_performance/delta_scan.benchmark
+# description: Reference result to compare attach functions to
+# group: [aggregate]
+
+name delta_scan reference
+group snapshot_performance
+
+require delta
+
+require parquet
+
+run
+SELECT COUNT(*) FROM delta_scan('./data/generated/delta_rs_tpch_sf1_100_splits/lineitem/delta_lake') where l_orderkey is not null
+
+result I
+6001215

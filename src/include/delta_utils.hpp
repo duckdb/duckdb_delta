@@ -108,6 +108,61 @@ typedef TemplatedUniqueKernelPointer<ffi::SharedScan, ffi::free_scan> KernelScan
 typedef TemplatedUniqueKernelPointer<ffi::SharedGlobalScanState, ffi::free_global_scan_state> KernelGlobalScanState;
 typedef TemplatedUniqueKernelPointer<ffi::SharedScanDataIterator, ffi::free_kernel_scan_data> KernelScanDataIterator;
 
+template <typename KernelType, void (*DeleteFunction)(KernelType*)>
+struct SharedKernelPointer;
+
+// A reference to a SharedKernelPointer, only 1 can be handed out at the same time
+template <typename KernelType, void (*DeleteFunction)(KernelType*)>
+struct SharedKernelRef {
+    friend struct SharedKernelPointer<KernelType, DeleteFunction>;
+public:
+    KernelType* GetPtr() {
+        return owning_pointer.kernel_ptr.get();
+    }
+    ~SharedKernelRef() {
+        owning_pointer.lock.unlock();
+    }
+
+protected:
+    SharedKernelRef(SharedKernelPointer<KernelType, DeleteFunction>& owning_pointer_p) : owning_pointer(owning_pointer_p) {
+        owning_pointer.lock.lock();
+    }
+
+protected:
+    // The pointer that owns this ref
+    SharedKernelPointer<KernelType, DeleteFunction>& owning_pointer;
+};
+
+// Wrapper around ffi objects to share between threads
+template <typename KernelType, void (*DeleteFunction)(KernelType*)>
+struct SharedKernelPointer {
+    friend struct SharedKernelRef<KernelType, DeleteFunction>;
+public:
+    SharedKernelPointer(TemplatedUniqueKernelPointer<KernelType, DeleteFunction> unique_kernel_ptr) : kernel_ptr(unique_kernel_ptr) {}
+    SharedKernelPointer(KernelType* ptr) : kernel_ptr(ptr){}
+    SharedKernelPointer(){}
+
+    SharedKernelPointer(SharedKernelPointer&& other) : SharedKernelPointer() {
+        other.lock.lock();
+        lock.lock();
+        kernel_ptr = std::move(other.kernel_ptr);
+        lock.lock();
+        other.lock.lock();
+    }
+
+    // Returns a reference to the underlying kernel object. The SharedKernelPointer to this object will be locked for the
+    // lifetime of this reference
+    SharedKernelRef<KernelType, DeleteFunction> GetLockingRef() {
+        return SharedKernelRef<KernelType, DeleteFunction>(*this);
+    }
+
+protected:
+    TemplatedUniqueKernelPointer<KernelType, DeleteFunction> kernel_ptr;
+    mutex lock;
+};
+
+typedef SharedKernelPointer<ffi::SharedSnapshot, ffi::free_snapshot> SharedKernelSnapshot;
+
 struct KernelUtils {
     static ffi::KernelStringSlice ToDeltaString(const string &str);
     static string FromDeltaString(const struct ffi::KernelStringSlice slice);

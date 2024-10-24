@@ -19,7 +19,9 @@
 #include <string>
 #include <numeric>
 #include <regex>
+#include <duckdb/main/attached_database.hpp>
 #include <duckdb/main/client_data.hpp>
+#include <storage/delta_catalog.hpp>
 
 namespace duckdb {
 
@@ -387,22 +389,42 @@ string DeltaSnapshot::ToDeltaPath(const string &raw_path) {
 }
 
 void DeltaSnapshot::Bind(vector<LogicalType> &return_types, vector<string> &names) {
-    if (!initialized) {
-        InitializeFiles();
+    if (have_bound) {
+        names = this->names;
+        return_types = this->types;
+        return;
     }
-    auto schema = SchemaVisitor::VisitSnapshotSchema(snapshot.get());
+
+    if (!initialized_snapshot) {
+        InitializeSnapshot();
+    }
+
+    unique_ptr<SchemaVisitor::FieldList> schema;
+
+    {
+        auto snapshot_ref = snapshot->GetLockingRef();
+        schema = SchemaVisitor::VisitSnapshotSchema(snapshot_ref.GetPtr());
+    }
+
     for (const auto &field: *schema) {
         names.push_back(field.first);
         return_types.push_back(field.second);
     }
     // Store the bound names for resolving the complex filter pushdown later
+    have_bound = true;
     this->names = names;
+    this->types = return_types;
 }
 
 string DeltaSnapshot::GetFile(idx_t i) {
-    if (!initialized) {
-        InitializeFiles();
+    if (!initialized_snapshot) {
+        InitializeSnapshot();
     }
+
+    if(!initialized_scan) {
+        InitializeScan();
+    }
+
     // We already have this file
     if (i < resolved_files.size()) {
         return resolved_files[i];
@@ -432,35 +454,46 @@ string DeltaSnapshot::GetFile(idx_t i) {
     return resolved_files[i];
 }
 
-void DeltaSnapshot::InitializeFiles() {
+void DeltaSnapshot::InitializeSnapshot() {
     auto path_slice = KernelUtils::ToDeltaString(paths[0]);
 
-    // Register engine
     auto interface_builder = CreateBuilder(context, paths[0]);
     extern_engine = TryUnpackKernelResult( ffi::builder_build(interface_builder));
 
-    // Initialize Snapshot
-    snapshot = TryUnpackKernelResult(ffi::snapshot(path_slice, extern_engine.get()));
+    if (!snapshot) {
+        snapshot = make_shared_ptr<SharedKernelSnapshot>(TryUnpackKernelResult(ffi::snapshot(path_slice, extern_engine.get())));
+    }
+
+    initialized_snapshot = true;
+}
+
+void DeltaSnapshot::InitializeScan() {
+    auto snapshot_ref = snapshot->GetLockingRef();
 
     // Create Scan
     PredicateVisitor visitor(names, &table_filters);
-    scan = TryUnpackKernelResult(ffi::scan(snapshot.get(), extern_engine.get(), &visitor));
+    scan = TryUnpackKernelResult(ffi::scan(snapshot_ref.GetPtr(), extern_engine.get(), &visitor));
 
     // Create GlobalState
     global_state = ffi::get_global_scan_state(scan.get());
 
     // Set version
-    this->version = ffi::version(snapshot.get());
+    this->version = ffi::version(snapshot_ref.GetPtr());
 
     // Create scan data iterator
     scan_data_iterator = TryUnpackKernelResult(ffi::kernel_scan_data_init(extern_engine.get(), scan.get()));
 
-    initialized = true;
+    initialized_scan = true;
 }
 
 unique_ptr<MultiFileList> DeltaSnapshot::ComplexFilterPushdown(ClientContext &context, const MultiFileReaderOptions &options, MultiFilePushdownInfo &info,
                                                vector<unique_ptr<Expression>> &filters) {
     FilterCombiner combiner(context);
+
+    if (filters.empty()) {
+        return nullptr;
+    }
+
     for (const auto &filter : filters) {
         combiner.AddFilter(filter->Copy());
     }
@@ -470,6 +503,9 @@ unique_ptr<MultiFileList> DeltaSnapshot::ComplexFilterPushdown(ClientContext &co
     auto filtered_list = make_uniq<DeltaSnapshot>(context, paths[0]);
     filtered_list->table_filters = std::move(filterstmp);
     filtered_list->names = names;
+
+    // Copy over the snapshot, this avoids reparsing metadata
+    filtered_list->snapshot = snapshot;
 
     return std::move(filtered_list);
 }
@@ -484,16 +520,11 @@ vector<string> DeltaSnapshot::GetAllFiles() {
 }
 
 FileExpandResult DeltaSnapshot::GetExpandResult() {
-    // GetFile(1) will ensure at least the first 2 files are expanded if they are available
-    GetFile(1);
-
-    if (resolved_files.size() > 1) {
-        return FileExpandResult::MULTIPLE_FILES;
-    } else if (resolved_files.size() == 1) {
-        return FileExpandResult::SINGLE_FILE;
-    }
-
-    return FileExpandResult::NO_FILES;
+    // We avoid exposing the ExpandResult to DuckDB here because we want to materialize the Snapshot as late as possible:
+    // materializing too early (GetExpandResult is called *before* filter pushdown by the Parquet scanner), will lead into
+    // needing to create 2 scans of the snapshot TODO: we need to investigate if this is actually a sensible decision with
+    // some benchmarking, its currently based on intuition.
+    return FileExpandResult::MULTIPLE_FILES;
 }
 
 idx_t DeltaSnapshot::GetTotalFileCount() {
@@ -529,8 +560,14 @@ unique_ptr<NodeStatistics> DeltaSnapshot::GetCardinality(ClientContext &context)
     return nullptr;
 }
 
-unique_ptr<MultiFileReader> DeltaMultiFileReader::CreateInstance() {
-    return std::move(make_uniq<DeltaMultiFileReader>());
+unique_ptr<MultiFileReader> DeltaMultiFileReader::CreateInstance(const TableFunction &table_function) {
+    auto result = make_uniq<DeltaMultiFileReader>();
+
+    if (table_function.function_info) {
+        result->snapshot = table_function.function_info->Cast<DeltaFunctionInfo>().snapshot;
+    }
+
+    return std::move(result);
 }
 
 bool DeltaMultiFileReader::Bind(MultiFileReaderOptions &options, MultiFileList &files,
@@ -618,9 +655,18 @@ void DeltaMultiFileReader::FinalizeBind(const MultiFileReaderOptions &file_optio
     }
 }
 
-unique_ptr<MultiFileList> DeltaMultiFileReader::CreateFileList(ClientContext &context, const vector<string>& paths, FileGlobOptions options) {
+shared_ptr<MultiFileList> DeltaMultiFileReader::CreateFileList(ClientContext &context, const vector<string>& paths, FileGlobOptions options) {
     if (paths.size() != 1) {
         throw BinderException("'delta_scan' only supports single path as input");
+    }
+
+
+    if (snapshot) {
+        // TODO: assert that we are querying the same path as this injected snapshot
+        // This takes the kernel snapshot from the delta snapshot and ensures we use that snapshot for reading
+        if (snapshot) {
+            return snapshot;
+        }
     }
 
     return make_uniq<DeltaSnapshot>(context, paths[0]);
