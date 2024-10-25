@@ -51,6 +51,7 @@ enum class KernelError {
   InvalidStructDataError,
   InternalError,
   InvalidExpression,
+  InvalidLogPath,
 };
 
 struct CStringMap;
@@ -107,10 +108,10 @@ struct KernelRowIndexArray {
 /// An accompanying [`HandleDescriptor`] trait defines the behavior of each handle type:
 ///
 /// * The true underlying ("target") type the handle represents. For safety reasons, target type
-/// must always be [`Send`].
+///   must always be [`Send`].
 ///
 /// * Mutable (`Box`-like) vs. shared (`Arc`-like). For safety reasons, the target type of a
-/// shared handle must always be [`Send`]+[`Sync`].
+///   shared handle must always be [`Send`]+[`Sync`].
 ///
 /// * Sized vs. unsized. Sized types allow handle operations to be implemented more efficiently.
 ///
@@ -204,6 +205,125 @@ using NullableCvoid = void*;
 /// function is that `kernel_str` is _only_ valid until the return from this function
 using AllocateStringFn = NullableCvoid(*)(KernelStringSlice kernel_str);
 
+struct FileMeta {
+  KernelStringSlice path;
+  int64_t last_modified;
+  uintptr_t size;
+};
+
+/// Model iterators. This allows an engine to specify iteration however it likes, and we simply wrap
+/// the engine functions. The engine retains ownership of the iterator.
+struct EngineIterator {
+  void *data;
+  /// A function that should advance the iterator and return the next time from the data
+  /// If the iterator is complete, it should return null. It should be safe to
+  /// call `get_next()` multiple times if it returns null.
+  const void *(*get_next)(void *data);
+};
+
+/// ABI-compatible struct for ArrowArray from C Data Interface
+/// See <https://arrow.apache.org/docs/format/CDataInterface.html#structure-definitions>
+///
+/// ```
+/// # use arrow_data::ArrayData;
+/// # use arrow_data::ffi::FFI_ArrowArray;
+/// fn export_array(array: &ArrayData) -> FFI_ArrowArray {
+///     FFI_ArrowArray::new(array)
+/// }
+/// ```
+struct FFI_ArrowArray {
+  int64_t length;
+  int64_t null_count;
+  int64_t offset;
+  int64_t n_buffers;
+  int64_t n_children;
+  const void **buffers;
+  FFI_ArrowArray **children;
+  FFI_ArrowArray *dictionary;
+  void (*release)(FFI_ArrowArray *arg1);
+  void *private_data;
+};
+
+/// ABI-compatible struct for `ArrowSchema` from C Data Interface
+/// See <https://arrow.apache.org/docs/format/CDataInterface.html#structure-definitions>
+///
+/// ```
+/// # use arrow_schema::DataType;
+/// # use arrow_schema::ffi::FFI_ArrowSchema;
+/// fn array_schema(data_type: &DataType) -> FFI_ArrowSchema {
+///     FFI_ArrowSchema::try_from(data_type).unwrap()
+/// }
+/// ```
+///
+struct FFI_ArrowSchema {
+  const char *format;
+  const char *name;
+  const char *metadata;
+  /// Refer to [Arrow Flags](https://arrow.apache.org/docs/format/CDataInterface.html#c.ArrowSchema.flags)
+  int64_t flags;
+  int64_t n_children;
+  FFI_ArrowSchema **children;
+  FFI_ArrowSchema *dictionary;
+  void (*release)(FFI_ArrowSchema *arg1);
+  void *private_data;
+};
+
+#if defined(DEFINE_DEFAULT_ENGINE)
+/// Struct to allow binding to the arrow [C Data
+/// Interface](https://arrow.apache.org/docs/format/CDataInterface.html). This includes the data and
+/// the schema.
+struct ArrowFFIData {
+  FFI_ArrowArray array;
+  FFI_ArrowSchema schema;
+};
+#endif
+
+/// A predicate that can be used to skip data when scanning.
+///
+/// When invoking [`scan::scan`], The engine provides a pointer to the (engine's native) predicate,
+/// along with a visitor function that can be invoked to recursively visit the predicate. This
+/// engine state must be valid until the call to `scan::scan` returns. Inside that method, the
+/// kernel allocates visitor state, which becomes the second argument to the predicate visitor
+/// invocation along with the engine-provided predicate pointer. The visitor state is valid for the
+/// lifetime of the predicate visitor invocation. Thanks to this double indirection, engine and
+/// kernel each retain ownership of their respective objects, with no need to coordinate memory
+/// lifetimes with the other.
+struct EnginePredicate {
+  void *predicate;
+  uintptr_t (*visitor)(void *predicate, KernelExpressionVisitorState *state);
+};
+
+/// Give engines an easy way to consume stats
+struct Stats {
+  /// For any file where the deletion vector is not present (see [`DvInfo::has_vector`]), the
+  /// `num_records` statistic must be present and accurate, and must equal the number of records
+  /// in the data file. In the presence of Deletion Vectors the statistics may be somewhat
+  /// outdated, i.e. not reflecting deleted rows yet.
+  uint64_t num_records;
+};
+
+using CScanCallback = void(*)(NullableCvoid engine_context,
+                              KernelStringSlice path,
+                              int64_t size,
+                              const Stats *stats,
+                              const DvInfo *dv_info,
+                              const CStringMap *partition_map);
+
+// This trickery is from https://github.com/mozilla/cbindgen/issues/402#issuecomment-578680163
+struct im_an_unused_struct_that_tricks_msvc_into_compilation {
+    ExternResult<KernelBoolSlice> field;
+    ExternResult<bool> field2;
+    ExternResult<EngineBuilder*> field3;
+    ExternResult<Handle<SharedExternEngine>> field4;
+    ExternResult<Handle<SharedSnapshot>> field5;
+    ExternResult<uintptr_t> field6;
+    ExternResult<ArrowFFIData*> field7;
+    ExternResult<Handle<SharedScanDataIterator>> field8;
+    ExternResult<Handle<SharedScan>> field9;
+    ExternResult<Handle<ExclusiveFileReadResultIterator>> field10;
+    ExternResult<KernelRowIndexArray> field11;
+};
+
 /// The `EngineSchemaVisitor` defines a visitor system to allow engines to build their own
 /// representation of a schema from a particular schema within kernel.
 ///
@@ -285,124 +405,6 @@ struct EngineSchemaVisitor {
   void (*visit_timestamp)(void *data, uintptr_t sibling_list_id, KernelStringSlice name);
   /// Visit a `timestamp` with no timezone belonging to the list identified by `sibling_list_id`.
   void (*visit_timestamp_ntz)(void *data, uintptr_t sibling_list_id, KernelStringSlice name);
-};
-
-/// Model iterators. This allows an engine to specify iteration however it likes, and we simply wrap
-/// the engine functions. The engine retains ownership of the iterator.
-struct EngineIterator {
-  void *data;
-  /// A function that should advance the iterator and return the next time from the data
-  /// If the iterator is complete, it should return null. It should be safe to
-  /// call `get_next()` multiple times if it returns null.
-  const void *(*get_next)(void *data);
-};
-
-struct FileMeta {
-  KernelStringSlice path;
-  int64_t last_modified;
-  uintptr_t size;
-};
-
-/// ABI-compatible struct for ArrowArray from C Data Interface
-/// See <https://arrow.apache.org/docs/format/CDataInterface.html#structure-definitions>
-///
-/// ```
-/// # use arrow_data::ArrayData;
-/// # use arrow_data::ffi::FFI_ArrowArray;
-/// fn export_array(array: &ArrayData) -> FFI_ArrowArray {
-///     FFI_ArrowArray::new(array)
-/// }
-/// ```
-struct FFI_ArrowArray {
-  int64_t length;
-  int64_t null_count;
-  int64_t offset;
-  int64_t n_buffers;
-  int64_t n_children;
-  const void **buffers;
-  FFI_ArrowArray **children;
-  FFI_ArrowArray *dictionary;
-  void (*release)(FFI_ArrowArray *arg1);
-  void *private_data;
-};
-
-/// ABI-compatible struct for `ArrowSchema` from C Data Interface
-/// See <https://arrow.apache.org/docs/format/CDataInterface.html#structure-definitions>
-///
-/// ```
-/// # use arrow_schema::DataType;
-/// # use arrow_schema::ffi::FFI_ArrowSchema;
-/// fn array_schema(data_type: &DataType) -> FFI_ArrowSchema {
-///     FFI_ArrowSchema::try_from(data_type).unwrap()
-/// }
-/// ```
-///
-struct FFI_ArrowSchema {
-  const char *format;
-  const char *name;
-  const char *metadata;
-  int64_t flags;
-  int64_t n_children;
-  FFI_ArrowSchema **children;
-  FFI_ArrowSchema *dictionary;
-  void (*release)(FFI_ArrowSchema *arg1);
-  void *private_data;
-};
-
-#if defined(DEFINE_DEFAULT_ENGINE)
-/// Struct to allow binding to the arrow [C Data
-/// Interface](https://arrow.apache.org/docs/format/CDataInterface.html). This includes the data and
-/// the schema.
-struct ArrowFFIData {
-  FFI_ArrowArray array;
-  FFI_ArrowSchema schema;
-};
-#endif
-
-/// A predicate that can be used to skip data when scanning.
-///
-/// When invoking [`scan::scan`], The engine provides a pointer to the (engine's native) predicate,
-/// along with a visitor function that can be invoked to recursively visit the predicate. This
-/// engine state must be valid until the call to `scan::scan` returns. Inside that method, the
-/// kernel allocates visitor state, which becomes the second argument to the predicate visitor
-/// invocation along with the engine-provided predicate pointer. The visitor state is valid for the
-/// lifetime of the predicate visitor invocation. Thanks to this double indirection, engine and
-/// kernel each retain ownership of their respective objects, with no need to coordinate memory
-/// lifetimes with the other.
-struct EnginePredicate {
-  void *predicate;
-  uintptr_t (*visitor)(void *predicate, KernelExpressionVisitorState *state);
-};
-
-/// Give engines an easy way to consume stats
-struct Stats {
-  /// For any file where the deletion vector is not present (see [`DvInfo::has_vector`]), the
-  /// `num_records` statistic must be present and accurate, and must equal the number of records
-  /// in the data file. In the presence of Deletion Vectors the statistics may be somewhat
-  /// outdated, i.e. not reflecting deleted rows yet.
-  uint64_t num_records;
-};
-
-using CScanCallback = void(*)(NullableCvoid engine_context,
-                              KernelStringSlice path,
-                              int64_t size,
-                              const Stats *stats,
-                              const DvInfo *dv_info,
-                              const CStringMap *partition_map);
-
-    // This trickery is from https://github.com/mozilla/cbindgen/issues/402#issuecomment-578680163
-struct im_an_unused_struct_that_tricks_msvc_into_compilation {
-    ExternResult<KernelBoolSlice> field;
-    ExternResult<bool> field2;
-    ExternResult<EngineBuilder*> field3;
-    ExternResult<Handle<SharedExternEngine>> field4;
-    ExternResult<Handle<SharedSnapshot>> field5;
-    ExternResult<uintptr_t> field6;
-    ExternResult<ArrowFFIData*> field7;
-    ExternResult<Handle<SharedScanDataIterator>> field8;
-    ExternResult<Handle<SharedScan>> field9;
-    ExternResult<Handle<ExclusiveFileReadResultIterator>> field10;
-    ExternResult<KernelRowIndexArray> field11;
 };
 
 extern "C" {
@@ -516,15 +518,34 @@ bool string_slice_next(Handle<StringSliceIterator> data,
 /// Caller is responsible for (at most once) passing a valid pointer to a [`StringSliceIterator`]
 void free_string_slice_data(Handle<StringSliceIterator> data);
 
-/// Visit the schema of the passed `SnapshotHandle`, using the provided `visitor`. See the
-/// documentation of [`EngineSchemaVisitor`] for a description of how this visitor works.
-///
-/// This method returns the id of the list allocated to hold the top level schema columns.
+/// Call the engine back with the next `EngingeData` batch read by Parquet/Json handler. The
+/// _engine_ "owns" the data that is passed into the `engine_visitor`, since it is allocated by the
+/// `Engine` being used for log-replay. If the engine wants the kernel to free this data, it _must_
+/// call [`free_engine_data`] on it.
 ///
 /// # Safety
 ///
-/// Caller is responsible for passing a valid snapshot handle and schema visitor.
-uintptr_t visit_schema(Handle<SharedSnapshot> snapshot, EngineSchemaVisitor *visitor);
+/// The iterator must be valid (returned by [`read_parquet_file`]) and not yet freed by
+/// [`free_read_result_iter`]. The visitor function pointer must be non-null.
+ExternResult<bool> read_result_next(Handle<ExclusiveFileReadResultIterator> data,
+                                    NullableCvoid engine_context,
+                                    void (*engine_visitor)(NullableCvoid engine_context,
+                                                           Handle<ExclusiveEngineData> engine_data));
+
+/// Free the memory from the passed read result iterator
+/// # Safety
+///
+/// Caller is responsible for (at most once) passing a valid pointer returned by a call to
+/// [`read_parquet_file`].
+void free_read_result_iter(Handle<ExclusiveFileReadResultIterator> data);
+
+/// Use the specified engine's [`delta_kernel::ParquetHandler`] to read the specified file.
+///
+/// # Safety
+/// Caller is responsible for calling with a valid `ExternEngineHandle` and `FileMeta`
+ExternResult<Handle<ExclusiveFileReadResultIterator>> read_parquet_file(Handle<SharedExternEngine> engine,
+                                                                        const FileMeta *file,
+                                                                        Handle<SharedSchema> physical_schema);
 
 uintptr_t visit_expression_and(KernelExpressionVisitorState *state, EngineIterator *children);
 
@@ -567,35 +588,6 @@ uintptr_t visit_expression_literal_float(KernelExpressionVisitorState *state, fl
 uintptr_t visit_expression_literal_double(KernelExpressionVisitorState *state, double value);
 
 uintptr_t visit_expression_literal_bool(KernelExpressionVisitorState *state, bool value);
-
-/// Call the engine back with the next `EngingeData` batch read by Parquet/Json handler. The
-/// _engine_ "owns" the data that is passed into the `engine_visitor`, since it is allocated by the
-/// `Engine` being used for log-replay. If the engine wants the kernel to free this data, it _must_
-/// call [`free_engine_data`] on it.
-///
-/// # Safety
-///
-/// The iterator must be valid (returned by [`read_parquet_file`]) and not yet freed by
-/// [`free_read_result_iter`]. The visitor function pointer must be non-null.
-ExternResult<bool> read_result_next(Handle<ExclusiveFileReadResultIterator> data,
-                                    NullableCvoid engine_context,
-                                    void (*engine_visitor)(NullableCvoid engine_context,
-                                                           Handle<ExclusiveEngineData> engine_data));
-
-/// Free the memory from the passed read result iterator
-/// # Safety
-///
-/// Caller is responsible for (at most once) passing a valid pointer returned by a call to
-/// [`read_parquet_file`].
-void free_read_result_iter(Handle<ExclusiveFileReadResultIterator> data);
-
-/// Use the specified engine's [`delta_kernel::ParquetHandler`] to read the specified file.
-///
-/// # Safety
-/// Caller is responsible for calling with a valid `ExternEngineHandle` and `FileMeta`
-ExternResult<Handle<ExclusiveFileReadResultIterator>> read_parquet_file(Handle<SharedExternEngine> engine,
-                                                                        const FileMeta *file,
-                                                                        Handle<SharedSchema> physical_schema);
 
 /// Get the number of rows in an engine data
 ///
@@ -736,6 +728,16 @@ void visit_scan_data(Handle<ExclusiveEngineData> data,
                      KernelBoolSlice selection_vec,
                      NullableCvoid engine_context,
                      CScanCallback callback);
+
+/// Visit the schema of the passed `SnapshotHandle`, using the provided `visitor`. See the
+/// documentation of [`EngineSchemaVisitor`] for a description of how this visitor works.
+///
+/// This method returns the id of the list allocated to hold the top level schema columns.
+///
+/// # Safety
+///
+/// Caller is responsible for passing a valid snapshot handle and schema visitor.
+uintptr_t visit_schema(Handle<SharedSnapshot> snapshot, EngineSchemaVisitor *visitor);
 
 }  // extern "C"
 
