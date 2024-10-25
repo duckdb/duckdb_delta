@@ -71,8 +71,7 @@ optional_idx DeltaCatalog::GetCatalogVersion(ClientContext &context) {
         return delta_transaction.table_entry->snapshot->version;
     }
 
-    // FIXME: this is not allowed
-    return optional_idx::Invalid();
+    return {};
 }
 
 DatabaseSize DeltaCatalog::GetDatabaseSize(ClientContext &context) {
