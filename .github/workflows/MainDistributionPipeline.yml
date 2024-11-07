@@ -16,7 +16,8 @@ jobs:
     name: Build extension binaries
     uses: duckdb/extension-ci-tools/.github/workflows/_extension_distribution.yml@main
     with:
-      duckdb_version: main
+      # pip install duckdb==1.1.4.dev1594
+      duckdb_version: 0ccf3c25cc
       ci_tools_version: main
       extension_name: delta
       enable_rust: true
