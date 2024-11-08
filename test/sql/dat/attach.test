@@ -1,0 +1,125 @@
+# name: test/sql/dat/attach.test
+# description: Test attaching a delta table
+# group: [dat]
+
+require parquet
+
+require delta
+
+require-env DAT_PATH
+
+statement ok
+ATTACH '${DAT_PATH}/out/reader_tests/generated/all_primitive_types/delta' as dt (TYPE delta)
+
+# We can query the table by the catalog name
+query I
+select utf8 from dt
+----
+0
+1
+2
+3
+4
+
+# We can query the table using the catalog name + the constant `delta_table` as name
+query I
+select utf8 from dt.delta_table
+----
+0
+1
+2
+3
+4
+
+# We can query the table using the catalog name + default schema + the constant `delta_table` as name
+query I
+select utf8 from dt.main.delta_table
+----
+0
+1
+2
+3
+4
+
+# Now we create a different table that is actually called dt
+statement ok
+create table dt as select 1 as id, 2 as utf8
+
+# This is now ambiguous!
+statement error
+from dt
+----
+Catalog Error: Ambiguity detected for 'dt': this could either refer to the 'Table' 'dt', or the attached catalog 'dt' which has a default table. To avoid this error, either detach the catalog and reattach under a different name, or use a fully qualified name for the 'Table': 'memory.main.dt' or for the Catalog Default Table: 'dt.main.delta_table'.
+
+# Join the two tables using fully qualified names
+query III
+SELECT
+    id,
+    dt1.utf8,
+    dt2.utf8
+FROM
+    memory.main.dt as dt1
+LEFT JOIN
+    dt.main.delta_table as dt2
+ON
+    dt1.utf8 = dt2.utf8
+----
+1	2	2
+
+
+# You shouldn't be doing this, but its technically possible: we mount the single-table-catalog
+statement ok
+use dt
+
+# We can still query the delta catalog default table by its name
+query I
+select utf8 from dt
+----
+0
+1
+2
+3
+4
+
+# Or by the default delta table name (`delta_table`)
+query I
+select utf8 from delta_table
+----
+0
+1
+2
+3
+4
+
+# Or by specifying the default schema
+query I
+select utf8 from main.delta_table
+----
+0
+1
+2
+3
+4
+
+statement ok
+USE memory
+
+statement ok
+DROP TABLE main.dt
+
+statement ok
+DETACH dt
+
+# Test the PIN_SNAPSHOT option: the snapshot is now pinned on attaching
+statement ok
+ATTACH '${DAT_PATH}/out/reader_tests/generated/all_primitive_types/delta' as dt (TYPE delta, PIN_SNAPSHOT)
+
+# This query will now reuse
+query I
+select utf8 from dt
+----
+0
+1
+2
+3
+4

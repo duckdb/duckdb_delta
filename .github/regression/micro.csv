@@ -1,0 +1,5 @@
+benchmark/micro/snapshot_performance/delta_scan.benchmark
+benchmark/micro/snapshot_performance/snapshot_no_pin.benchmark
+benchmark/micro/snapshot_performance/snapshot_no_pin_filter.benchmark
+benchmark/micro/snapshot_performance/snapshot_pin.benchmark
+benchmark/micro/snapshot_performance/snapshot_pin_filter.benchmark

@@ -14,21 +14,24 @@ concurrency:
 jobs:
   duckdb-stable-build:
     name: Build extension binaries
-    uses: duckdb/extension-ci-tools/.github/workflows/_extension_distribution.yml@v1.1.2
+    uses: duckdb/extension-ci-tools/.github/workflows/_extension_distribution.yml@main
     with:
-      duckdb_version: v1.1.2
-      ci_tools_version: v1.1.2
+      # pip install duckdb==1.1.4.dev1594
+      duckdb_version: 0ccf3c25cc
+      ci_tools_version: main
       extension_name: delta
       enable_rust: true
-      exclude_archs: 'wasm_mvp;wasm_eh;wasm_threads;windows_amd64_rtools'
+      exclude_archs: 'wasm_mvp;wasm_eh;wasm_threads;windows_amd64_mingw'
+      extra_toolchains: 'python3'
+      vcpkg_commit: c82f74667287d3dc386bce81e44964370c91a289
 
   duckdb-stable-deploy:
     name: Deploy extension binaries
     needs: duckdb-stable-build
-    uses: duckdb/extension-ci-tools/.github/workflows/_extension_deploy.yml@v1.1.2
+    uses: duckdb/extension-ci-tools/.github/workflows/_extension_deploy.yml@main
     secrets: inherit
     with:
       extension_name: delta
-      duckdb_version: v1.1.2
-      exclude_archs: 'wasm_mvp;wasm_eh;wasm_threads;windows_amd64_rtools'
+      duckdb_version: 0ccf3c25cc
+      exclude_archs: 'wasm_mvp;wasm_eh;wasm_threads;windows_amd64_mingw'
       deploy_latest: ${{ startsWith(github.ref, 'refs/tags/v') || github.ref == 'refs/heads/main' }}

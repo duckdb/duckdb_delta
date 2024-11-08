@@ -1,0 +1,19 @@
+# name: benchmark/micro/snapshot_performance/snapshot_no_pin_filter.benchmark
+# description: Performance of reading from a table with many log entries
+# group: [aggregate]
+
+name Snapshot no pin filter
+group snapshot_performance
+
+require delta
+
+require parquet
+
+load
+ATTACH './data/generated/delta_rs_tpch_sf1_100_splits/lineitem/delta_lake' as lineitem_no_pin (TYPE delta);
+
+run
+SELECT COUNT(*) FROM lineitem_no_pin where l_orderkey is not null
+
+result I
+6001215
