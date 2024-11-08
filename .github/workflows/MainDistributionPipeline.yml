@@ -22,6 +22,7 @@ jobs:
       extension_name: delta
       enable_rust: true
       exclude_archs: 'wasm_mvp;wasm_eh;wasm_threads;windows_amd64_mingw'
+      extra_toolchains: 'python3'
 
   duckdb-stable-deploy:
     name: Deploy extension binaries
