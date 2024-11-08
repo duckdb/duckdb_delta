@@ -210,12 +210,14 @@ jobs:
 
       - name: Build
         shell: bash
-        run: make generate-data
+        run: |
+          make generate-data
+          make release
 
       - name: Test
         shell: bash
         run: |
-          GENERATED_DATA_AVAILABLE=1 make test
+          GENERATED_DATA_AVAILABLE=1 make test_release
 
   regression-test-benchmark-runner:
     name: Performance Regression Tests
@@ -280,19 +282,19 @@ jobs:
         if: always()
         shell: bash
         run: |
-          python3 ./duckdb/scripts/regression_test_runner.py --old=duckdb_delta/build/release/benchmark/benchmark_runner --new=build/release/benchmark/benchmark_runner --benchmarks=.github/regression/tpch_sf1_local.csv --verbose --threads=2 --root-dir=.
+          python3 ./duckdb/scripts/regression/test_runner.py --old=duckdb_delta/build/release/benchmark/benchmark_runner --new=build/release/benchmark/benchmark_runner --benchmarks=.github/regression/tpch_sf1_local.csv --verbose --threads=2 --root-dir=.
 
       - name: Regression Test TPC-DS
         if: always()
         shell: bash
         run: |
-          python ./duckdb/scripts/regression_test_runner.py --old=duckdb_delta/build/release/benchmark/benchmark_runner --new=build/release/benchmark/benchmark_runner --benchmarks=.github/regression/tpcds_sf1_local.csv --verbose --threads=2 --root-dir=.
+          python ./duckdb/scripts/regression/test_runner.py --old=duckdb_delta/build/release/benchmark/benchmark_runner --new=build/release/benchmark/benchmark_runner --benchmarks=.github/regression/tpcds_sf1_local.csv --verbose --threads=2 --root-dir=.
 
       - name: Regression Test Micro
         if: always()
         shell: bash
         run: |
-          python ./duckdb/scripts/regression_test_runner.py --old=duckdb_delta/build/release/benchmark/benchmark_runner --new=build/release/benchmark/benchmark_runner --benchmarks=.github/regression/micro.csv --verbose --threads=2 --root-dir=.
+          python ./duckdb/scripts/regression/test_runner.py --old=duckdb_delta/build/release/benchmark/benchmark_runner --new=build/release/benchmark/benchmark_runner --benchmarks=.github/regression/micro.csv --verbose --threads=2 --root-dir=.
 
       - name: Test benchmark makefile
         shell: bash
