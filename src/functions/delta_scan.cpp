@@ -6,6 +6,7 @@
 #include "duckdb/common/types/data_chunk.hpp"
 #include "duckdb/execution/expression_executor.hpp"
 #include "duckdb/function/table_function.hpp"
+#include "duckdb/main/extension_helper.hpp"
 #include "duckdb/main/extension_util.hpp"
 #include "duckdb/main/secret/secret_manager.hpp"
 #include "duckdb/optimizer/filter_combiner.hpp"
@@ -937,9 +938,11 @@ bool DeltaMultiFileReader::ParseOption(const string &key, const Value &val, Mult
 //}
 
 TableFunctionSet DeltaFunctions::GetDeltaScanFunction(DatabaseInstance &instance) {
+	// Parquet extension needs to be loaded for this to make sense
+	ExtensionHelper::AutoLoadExtension(instance, "parquet");
+
 	// The delta_scan function is constructed by grabbing the parquet scan from the Catalog, then injecting the
 	// DeltaMultiFileReader into it to create a Delta-based multi file read
-
 	auto &parquet_scan = ExtensionUtil::GetTableFunction(instance, "parquet_scan");
 	auto parquet_scan_copy = parquet_scan.functions;
 
