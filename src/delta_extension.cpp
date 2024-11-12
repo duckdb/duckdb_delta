@@ -13,18 +13,18 @@
 namespace duckdb {
 
 static unique_ptr<Catalog> DeltaCatalogAttach(StorageExtensionInfo *storage_info, ClientContext &context,
-                                       AttachedDatabase &db, const string &name, AttachInfo &info,
-                                       AccessMode access_mode) {
+                                              AttachedDatabase &db, const string &name, AttachInfo &info,
+                                              AccessMode access_mode) {
 
-    auto res = make_uniq<DeltaCatalog>(db, info.path, access_mode);
+	auto res = make_uniq<DeltaCatalog>(db, info.path, access_mode);
 
-    for (const auto& option : info.options) {
-        if (StringUtil::Lower(option.first) == "pin_snapshot") {
-            res->use_cache = option.second.GetValue<bool>();
-        }
-    }
+	for (const auto &option : info.options) {
+		if (StringUtil::Lower(option.first) == "pin_snapshot") {
+			res->use_cache = option.second.GetValue<bool>();
+		}
+	}
 
-    res->SetDefaultTable(DEFAULT_SCHEMA, DEFAULT_DELTA_TABLE);
+	res->SetDefaultTable(DEFAULT_SCHEMA, DEFAULT_DELTA_TABLE);
 
 	return std::move(res);
 }
@@ -44,14 +44,14 @@ public:
 };
 
 static void LoadInternal(DatabaseInstance &instance) {
-    // Load functions
-    for (const auto &function : DeltaFunctions::GetTableFunctions(instance)) {
-        ExtensionUtil::RegisterFunction(instance, function);
-    }
+	// Load functions
+	for (const auto &function : DeltaFunctions::GetTableFunctions(instance)) {
+		ExtensionUtil::RegisterFunction(instance, function);
+	}
 
-    // Register the "single table" delta catalog (to ATTACH a single delta table)
-    auto &config = DBConfig::GetConfig(instance);
-    config.storage_extensions["delta"] = make_uniq<DeltaStorageExtension>();
+	// Register the "single table" delta catalog (to ATTACH a single delta table)
+	auto &config = DBConfig::GetConfig(instance);
+	config.storage_extensions["delta"] = make_uniq<DeltaStorageExtension>();
 }
 
 void DeltaExtension::Load(DuckDB &db) {

@@ -30,7 +30,7 @@ public:
 
 	string path;
 	AccessMode access_mode;
-    bool use_cache;
+	bool use_cache;
 
 public:
 	void Initialize(bool load_builtin) override;
@@ -59,22 +59,22 @@ public:
 
 	DatabaseSize GetDatabaseSize(ClientContext &context) override;
 
-    optional_idx GetCatalogVersion(ClientContext &context) override;
+	optional_idx GetCatalogVersion(ClientContext &context) override;
 
 	bool InMemory() override;
 	string GetDBPath() override;
 
-    bool UseCachedSnapshot();
+	bool UseCachedSnapshot();
 
-    DeltaSchemaEntry& GetMainSchema() {
-        return *main_schema;
-    }
+	DeltaSchemaEntry &GetMainSchema() {
+		return *main_schema;
+	}
 
 private:
 	void DropSchema(ClientContext &context, DropInfo &info) override;
 
 private:
-    unique_ptr<DeltaSchemaEntry> main_schema;
+	unique_ptr<DeltaSchemaEntry> main_schema;
 	string default_schema;
 };
 

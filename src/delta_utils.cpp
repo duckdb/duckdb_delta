@@ -13,11 +13,11 @@ unique_ptr<SchemaVisitor::FieldList> SchemaVisitor::VisitSnapshotSchema(ffi::Sha
 	ffi::EngineSchemaVisitor visitor;
 
 	visitor.data = &state;
-	visitor.make_field_list = (uintptr_t (*)(void *, uintptr_t))&MakeFieldList;
-	visitor.visit_struct = (void (*)(void *, uintptr_t, ffi::KernelStringSlice, uintptr_t))&VisitStruct;
-	visitor.visit_array = (void (*)(void *, uintptr_t, ffi::KernelStringSlice, bool, uintptr_t))&VisitArray;
-	visitor.visit_map = (void (*)(void *, uintptr_t, ffi::KernelStringSlice, bool, uintptr_t))&VisitMap;
-	visitor.visit_decimal = (void (*)(void *, uintptr_t, ffi::KernelStringSlice, uint8_t, uint8_t))&VisitDecimal;
+	visitor.make_field_list = (uintptr_t(*)(void *, uintptr_t)) & MakeFieldList;
+	visitor.visit_struct = (void (*)(void *, uintptr_t, ffi::KernelStringSlice, uintptr_t)) & VisitStruct;
+	visitor.visit_array = (void (*)(void *, uintptr_t, ffi::KernelStringSlice, bool, uintptr_t)) & VisitArray;
+	visitor.visit_map = (void (*)(void *, uintptr_t, ffi::KernelStringSlice, bool, uintptr_t)) & VisitMap;
+	visitor.visit_decimal = (void (*)(void *, uintptr_t, ffi::KernelStringSlice, uint8_t, uint8_t)) & VisitDecimal;
 	visitor.visit_string = VisitSimpleType<LogicalType::VARCHAR>();
 	visitor.visit_long = VisitSimpleType<LogicalType::BIGINT>();
 	visitor.visit_integer = VisitSimpleType<LogicalType::INTEGER>();
@@ -176,7 +176,7 @@ vector<bool> KernelUtils::FromDeltaBoolSlice(const struct ffi::KernelBoolSlice s
 
 PredicateVisitor::PredicateVisitor(const vector<string> &column_names, optional_ptr<TableFilterSet> filters) {
 	predicate = this;
-	visitor = (uintptr_t (*)(void *, ffi::KernelExpressionVisitorState *))&VisitPredicate;
+	visitor = (uintptr_t(*)(void *, ffi::KernelExpressionVisitorState *)) & VisitPredicate;
 
 	if (filters) {
 		for (auto &filter : filters->filters) {

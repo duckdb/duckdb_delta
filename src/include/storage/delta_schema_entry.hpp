@@ -40,13 +40,13 @@ public:
 	void DropEntry(ClientContext &context, DropInfo &info) override;
 	optional_ptr<CatalogEntry> GetEntry(CatalogTransaction transaction, CatalogType type, const string &name) override;
 
-    optional_ptr<DeltaTableEntry> GetCachedTable();
+	optional_ptr<DeltaTableEntry> GetCachedTable();
 
 private:
-    //! Delta tables may be cached in the SchemaEntry. Since the TableEntry holds the snapshot, this allows sharing a snapshot
-    //! between different scans.
-    unique_ptr<DeltaTableEntry> cached_table;
-    mutex lock;
+	//! Delta tables may be cached in the SchemaEntry. Since the TableEntry holds the snapshot, this allows sharing a
+	//! snapshot between different scans.
+	unique_ptr<DeltaTableEntry> cached_table;
+	mutex lock;
 };
 
 } // namespace duckdb
