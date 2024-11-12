@@ -32,7 +32,7 @@ unique_ptr<BaseStatistics> DeltaTableEntry::GetStatistics(ClientContext &context
 }
 
 void DeltaTableEntry::BindUpdateConstraints(Binder &binder, LogicalGet &, LogicalProjection &, LogicalUpdate &,
-                                         ClientContext &) {
+                                            ClientContext &) {
 	throw NotImplementedException("BindUpdateConstraints for delta table");
 }
 
@@ -43,18 +43,17 @@ TableFunction DeltaTableEntry::GetScanFunction(ClientContext &context, unique_pt
 	auto delta_scan_function = delta_function_set.functions.GetFunctionByArguments(context, {LogicalType::VARCHAR});
 	auto &delta_catalog = catalog.Cast<DeltaCatalog>();
 
-    // Copy over the internal kernel snapshot
-    auto function_info = make_shared_ptr<DeltaFunctionInfo>();
+	// Copy over the internal kernel snapshot
+	auto function_info = make_shared_ptr<DeltaFunctionInfo>();
 
-    function_info->snapshot = this->snapshot;
-    delta_scan_function.function_info = std::move(function_info);
+	function_info->snapshot = this->snapshot;
+	delta_scan_function.function_info = std::move(function_info);
 
 	vector<Value> inputs = {delta_catalog.GetDBPath()};
 	named_parameter_map_t param_map;
 	vector<LogicalType> return_types;
 	vector<string> names;
 	TableFunctionRef empty_ref;
-
 
 	TableFunctionBindInput bind_input(inputs, param_map, return_types, names, nullptr, nullptr, delta_scan_function,
 	                                  empty_ref);

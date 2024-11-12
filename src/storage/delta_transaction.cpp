@@ -27,7 +27,7 @@ void DeltaTransaction::Commit() {
 void DeltaTransaction::Rollback() {
 	if (transaction_state == DeltaTransactionState::TRANSACTION_STARTED) {
 		transaction_state = DeltaTransactionState::TRANSACTION_FINISHED;
-	    // NOP: we only support read-only transactions currently
+		// NOP: we only support read-only transactions currently
 	}
 }
 
@@ -36,7 +36,7 @@ DeltaTransaction &DeltaTransaction::Get(ClientContext &context, Catalog &catalog
 }
 
 AccessMode DeltaTransaction::GetAccessMode() const {
-    return access_mode;
+	return access_mode;
 }
 
 } // namespace duckdb

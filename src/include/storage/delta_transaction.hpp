@@ -30,11 +30,12 @@ public:
 	static DeltaTransaction &Get(ClientContext &context, Catalog &catalog);
 	AccessMode GetAccessMode() const;
 
-    void SetReadWrite() override {
-        throw NotImplementedException("Can not start read-write transaction");
-    };
+	void SetReadWrite() override {
+		throw NotImplementedException("Can not start read-write transaction");
+	};
+
 public:
-    unique_ptr<DeltaTableEntry> table_entry;
+	unique_ptr<DeltaTableEntry> table_entry;
 
 private:
 	//	DeltaConnection connection;
