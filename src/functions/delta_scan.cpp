@@ -980,11 +980,17 @@ bool DeltaMultiFileReader::ParseOption(const string &key, const Value &val, Mult
 
 	return MultiFileReader::ParseOption(key, val, options, context);
 }
-//
-// DeltaMultiFileReaderBindData::DeltaMultiFileReaderBindData(DeltaSnapshot & delta_snapshot):
-// current_snapshot(delta_snapshot){
-//
-//}
+
+static InsertionOrderPreservingMap<string> DeltaFunctionToString(TableFunctionToStringInput &input) {
+    InsertionOrderPreservingMap<string> result;
+
+    if (input.table_function.function_info) {
+        auto& table_info = input.table_function.function_info->Cast<DeltaFunctionInfo>();
+        result["Table"] = table_info.table_name;
+    }
+
+    return result;
+}
 
 TableFunctionSet DeltaFunctions::GetDeltaScanFunction(DatabaseInstance &instance) {
 	// Parquet extension needs to be loaded for this to make sense
@@ -1006,6 +1012,8 @@ TableFunctionSet DeltaFunctions::GetDeltaScanFunction(DatabaseInstance &instance
 		function.statistics = nullptr;
 		function.table_scan_progress = nullptr;
 		function.get_bind_info = nullptr;
+
+	    function.to_string = DeltaFunctionToString;
 
 		// Schema param is just confusing here
 		function.named_parameters.erase("schema");

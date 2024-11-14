@@ -17,6 +17,7 @@ struct DeltaSnapshot;
 struct DeltaFunctionInfo : public TableFunctionInfo {
 	shared_ptr<DeltaSnapshot> snapshot;
 	string expected_path;
+    string table_name;
 };
 
 struct DeltaFileMetaData {
