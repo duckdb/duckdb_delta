@@ -526,7 +526,7 @@ unique_ptr<MultiFileList> DeltaSnapshot::ComplexFilterPushdown(ClientContext &co
 	for (const auto &filter : filters) {
 		combiner.AddFilter(filter->Copy());
 	}
-	auto filterstmp = combiner.GenerateTableScanFilters(info.column_ids);
+	auto filterstmp = combiner.GenerateTableScanFilters(info.column_indexes);
 
 	// TODO: can/should we figure out if this filtered anything?
 	auto filtered_list = make_uniq<DeltaSnapshot>(context, paths[0]);
@@ -643,9 +643,9 @@ void DeltaMultiFileReader::BindOptions(MultiFileReaderOptions &options, MultiFil
 void DeltaMultiFileReader::FinalizeBind(const MultiFileReaderOptions &file_options,
                                         const MultiFileReaderBindData &options, const string &filename,
                                         const vector<string> &local_names, const vector<LogicalType> &global_types,
-                                        const vector<string> &global_names, const vector<column_t> &global_column_ids,
-                                        MultiFileReaderData &reader_data, ClientContext &context,
-                                        optional_ptr<MultiFileReaderGlobalState> global_state) {
+                                        const vector<string> &global_names,
+                                        const vector<ColumnIndex> &global_column_ids, MultiFileReaderData &reader_data,
+                                        ClientContext &context, optional_ptr<MultiFileReaderGlobalState> global_state) {
 	MultiFileReader::FinalizeBind(file_options, options, filename, local_names, global_types, global_names,
 	                              global_column_ids, reader_data, context, global_state);
 
@@ -671,7 +671,7 @@ void DeltaMultiFileReader::FinalizeBind(const MultiFileReaderOptions &file_optio
 
 	if (!file_metadata->partition_map.empty()) {
 		for (idx_t i = 0; i < global_column_ids.size(); i++) {
-			column_t col_id = global_column_ids[i];
+			column_t col_id = global_column_ids[i].GetPrimaryIndex();
 			if (IsRowIdColumnId(col_id)) {
 				continue;
 			}
@@ -749,14 +749,14 @@ unique_ptr<MultiFileReaderGlobalState> DeltaMultiFileReader::InitializeGlobalSta
     duckdb::ClientContext &context, const duckdb::MultiFileReaderOptions &file_options,
     const duckdb::MultiFileReaderBindData &bind_data, const duckdb::MultiFileList &file_list,
     const vector<duckdb::LogicalType> &global_types, const vector<std::string> &global_names,
-    const vector<duckdb::column_t> &global_column_ids) {
+    const vector<ColumnIndex> &global_column_ids) {
 	vector<LogicalType> extra_columns;
 	vector<pair<string, idx_t>> mapped_columns;
 
 	// Create a map of the columns that are in the projection
 	case_insensitive_map_t<idx_t> selected_columns;
 	for (idx_t i = 0; i < global_column_ids.size(); i++) {
-		auto global_id = global_column_ids[i];
+		auto global_id = global_column_ids[i].GetPrimaryIndex();
 		if (IsRowIdColumnId(global_id)) {
 			continue;
 		}
@@ -815,7 +815,7 @@ unique_ptr<MultiFileReaderGlobalState> DeltaMultiFileReader::InitializeGlobalSta
 // in the parquet files, we just add null constant columns
 static void CustomMulfiFileNameMapping(const string &file_name, const vector<LogicalType> &local_types,
                                        const vector<string> &local_names, const vector<LogicalType> &global_types,
-                                       const vector<string> &global_names, const vector<column_t> &global_column_ids,
+                                       const vector<string> &global_names, const vector<ColumnIndex> &global_column_ids,
                                        MultiFileReaderData &reader_data, const string &initial_file,
                                        optional_ptr<MultiFileReaderGlobalState> global_state) {
 	D_ASSERT(global_types.size() == global_names.size());
@@ -839,7 +839,7 @@ static void CustomMulfiFileNameMapping(const string &file_name, const vector<Log
 			continue;
 		}
 		// not constant - look up the column in the name map
-		auto global_id = global_column_ids[i];
+		auto global_id = global_column_ids[i].GetPrimaryIndex();
 		if (global_id >= global_types.size()) {
 			throw InternalException(
 			    "MultiFileReader::CreatePositionalMapping - global_id is out of range in global_types for this file");
@@ -880,7 +880,7 @@ static void CustomMulfiFileNameMapping(const string &file_name, const vector<Log
 void DeltaMultiFileReader::CreateNameMapping(const string &file_name, const vector<LogicalType> &local_types,
                                              const vector<string> &local_names, const vector<LogicalType> &global_types,
                                              const vector<string> &global_names,
-                                             const vector<column_t> &global_column_ids,
+                                             const vector<ColumnIndex> &global_column_ids,
                                              MultiFileReaderData &reader_data, const string &initial_file,
                                              optional_ptr<MultiFileReaderGlobalState> global_state) {
 	// First call the base implementation to do most mapping
@@ -980,11 +980,17 @@ bool DeltaMultiFileReader::ParseOption(const string &key, const Value &val, Mult
 
 	return MultiFileReader::ParseOption(key, val, options, context);
 }
-//
-// DeltaMultiFileReaderBindData::DeltaMultiFileReaderBindData(DeltaSnapshot & delta_snapshot):
-// current_snapshot(delta_snapshot){
-//
-//}
+
+static InsertionOrderPreservingMap<string> DeltaFunctionToString(TableFunctionToStringInput &input) {
+	InsertionOrderPreservingMap<string> result;
+
+	if (input.table_function.function_info) {
+		auto &table_info = input.table_function.function_info->Cast<DeltaFunctionInfo>();
+		result["Table"] = table_info.table_name;
+	}
+
+	return result;
+}
 
 TableFunctionSet DeltaFunctions::GetDeltaScanFunction(DatabaseInstance &instance) {
 	// Parquet extension needs to be loaded for this to make sense
@@ -1006,6 +1012,8 @@ TableFunctionSet DeltaFunctions::GetDeltaScanFunction(DatabaseInstance &instance
 		function.statistics = nullptr;
 		function.table_scan_progress = nullptr;
 		function.get_bind_info = nullptr;
+
+		function.to_string = DeltaFunctionToString;
 
 		// Schema param is just confusing here
 		function.named_parameters.erase("schema");
