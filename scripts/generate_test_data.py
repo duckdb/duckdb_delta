@@ -180,7 +180,7 @@ generate_test_data_delta_rs("simple_partitioned_with_structs", query, "part")
 
 ## Partitioned table with all types we can file skip on
 for type in ["bool", "int", "tinyint", "smallint", "bigint", "float", "double", "varchar"]:
-    query = f"CREATE table test_table as select i::{type} as value, i::{type} as part from range(0,2) tbl(i)"
+    query = f"CREATE table test_table as select i::{type} as value1, (i)::{type} as value2, (i)::{type} as value3, i::{type} as part from range(0,5) tbl(i)"
     generate_test_data_delta_rs(f"test_file_skipping/{type}", query, "part")
 
 ## Simple table with deletion vector

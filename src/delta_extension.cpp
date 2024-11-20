@@ -52,6 +52,11 @@ static void LoadInternal(DatabaseInstance &instance) {
 	// Register the "single table" delta catalog (to ATTACH a single delta table)
 	auto &config = DBConfig::GetConfig(instance);
 	config.storage_extensions["delta"] = make_uniq<DeltaStorageExtension>();
+
+	config.AddExtensionOption("delta_scan_explain_files_filtered",
+	                          "Adds the filtered files to the explain output. Warning: this may change performance of "
+	                          "delta scan during explain analyze queries.",
+	                          LogicalType::BOOLEAN, Value(true));
 }
 
 void DeltaExtension::Load(DuckDB &db) {

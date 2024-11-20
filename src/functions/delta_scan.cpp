@@ -15,6 +15,7 @@
 #include "duckdb/parser/parsed_expression.hpp"
 #include "duckdb/planner/binder.hpp"
 #include "duckdb/planner/operator/logical_get.hpp"
+#include "duckdb/main/query_profiler.hpp"
 
 #include <duckdb/main/client_data.hpp>
 #include <numeric>
@@ -523,18 +524,66 @@ unique_ptr<MultiFileList> DeltaSnapshot::ComplexFilterPushdown(ClientContext &co
 		return nullptr;
 	}
 
-	for (const auto &filter : filters) {
-		combiner.AddFilter(filter->Copy());
+	for (auto riter = filters.rbegin(); riter != filters.rend(); ++riter) {
+		combiner.AddFilter(riter->get()->Copy());
 	}
+
 	auto filterstmp = combiner.GenerateTableScanFilters(info.column_indexes);
 
-	// TODO: can/should we figure out if this filtered anything?
 	auto filtered_list = make_uniq<DeltaSnapshot>(context, paths[0]);
 	filtered_list->table_filters = std::move(filterstmp);
 	filtered_list->names = names;
 
 	// Copy over the snapshot, this avoids reparsing metadata
 	filtered_list->snapshot = snapshot;
+
+	auto &profiler = QueryProfiler::Get(context);
+
+	// Note: this is potentially quite expensive: we are creating 2 scans of the snapshot and fully materializing both
+	// file lists Therefore this is only done when profile is enabled. This is enable by default in debug mode or for
+	// EXPLAIN ANALYZE queries
+	if (profiler.IsEnabled()) {
+		Value result;
+		if (!context.TryGetCurrentSetting("delta_scan_explain_files_filtered", result)) {
+			throw InternalException("Failed to find 'delta_scan_explain_files_filtered' option!");
+		} else if (result.GetValue<bool>()) {
+			auto old_total = GetTotalFileCount();
+			auto new_total = filtered_list->GetTotalFileCount();
+
+			if (old_total != new_total) {
+				string filters_info;
+				bool first_item = true;
+				for (auto &f : filtered_list->table_filters.filters) {
+					auto &column_index = f.first;
+					auto &filter = f.second;
+					if (column_index < names.size()) {
+						if (!first_item) {
+							filters_info += "\n";
+						}
+						first_item = false;
+						auto &col_name = names[column_index];
+						filters_info += filter->ToString(col_name);
+					}
+				}
+
+				info.extra_info.file_filters = filters_info;
+			}
+
+			if (!info.extra_info.total_files.IsValid()) {
+				info.extra_info.total_files = old_total;
+			} else if (info.extra_info.total_files.GetIndex() < old_total) {
+				throw InternalException(
+				    "Error encountered when analyzing filtered out files for delta scan: total_files inconsistent!");
+			}
+
+			if (!info.extra_info.filtered_files.IsValid() || info.extra_info.filtered_files.GetIndex() >= new_total) {
+				info.extra_info.filtered_files = new_total;
+			} else {
+				throw InternalException(
+				    "Error encountered when analyzing filtered out files for delta scan: filtered_files inconsistent!");
+			}
+		}
+	}
 
 	return std::move(filtered_list);
 }
