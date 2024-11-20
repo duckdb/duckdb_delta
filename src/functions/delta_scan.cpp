@@ -643,9 +643,9 @@ void DeltaMultiFileReader::BindOptions(MultiFileReaderOptions &options, MultiFil
 void DeltaMultiFileReader::FinalizeBind(const MultiFileReaderOptions &file_options,
                                         const MultiFileReaderBindData &options, const string &filename,
                                         const vector<string> &local_names, const vector<LogicalType> &global_types,
-                                        const vector<string> &global_names, const vector<ColumnIndex> &global_column_ids,
-                                        MultiFileReaderData &reader_data, ClientContext &context,
-                                        optional_ptr<MultiFileReaderGlobalState> global_state) {
+                                        const vector<string> &global_names,
+                                        const vector<ColumnIndex> &global_column_ids, MultiFileReaderData &reader_data,
+                                        ClientContext &context, optional_ptr<MultiFileReaderGlobalState> global_state) {
 	MultiFileReader::FinalizeBind(file_options, options, filename, local_names, global_types, global_names,
 	                              global_column_ids, reader_data, context, global_state);
 
@@ -982,14 +982,14 @@ bool DeltaMultiFileReader::ParseOption(const string &key, const Value &val, Mult
 }
 
 static InsertionOrderPreservingMap<string> DeltaFunctionToString(TableFunctionToStringInput &input) {
-    InsertionOrderPreservingMap<string> result;
+	InsertionOrderPreservingMap<string> result;
 
-    if (input.table_function.function_info) {
-        auto& table_info = input.table_function.function_info->Cast<DeltaFunctionInfo>();
-        result["Table"] = table_info.table_name;
-    }
+	if (input.table_function.function_info) {
+		auto &table_info = input.table_function.function_info->Cast<DeltaFunctionInfo>();
+		result["Table"] = table_info.table_name;
+	}
 
-    return result;
+	return result;
 }
 
 TableFunctionSet DeltaFunctions::GetDeltaScanFunction(DatabaseInstance &instance) {
@@ -1013,7 +1013,7 @@ TableFunctionSet DeltaFunctions::GetDeltaScanFunction(DatabaseInstance &instance
 		function.table_scan_progress = nullptr;
 		function.get_bind_info = nullptr;
 
-	    function.to_string = DeltaFunctionToString;
+		function.to_string = DeltaFunctionToString;
 
 		// Schema param is just confusing here
 		function.named_parameters.erase("schema");

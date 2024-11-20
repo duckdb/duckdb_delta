@@ -47,7 +47,7 @@ TableFunction DeltaTableEntry::GetScanFunction(ClientContext &context, unique_pt
 	auto function_info = make_shared_ptr<DeltaFunctionInfo>();
 
 	function_info->snapshot = this->snapshot;
-    function_info->table_name = delta_catalog.GetName();
+	function_info->table_name = delta_catalog.GetName();
 	delta_scan_function.function_info = std::move(function_info);
 
 	vector<Value> inputs = {delta_catalog.GetDBPath()};
