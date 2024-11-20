@@ -123,3 +123,9 @@ select utf8 from dt
 2
 3
 4
+
+# Test that the explain output contains the table name
+query II
+explain from dt
+----
+physical_plan	<REGEX>:.*Table: dt.*
