@@ -133,7 +133,7 @@ struct DeltaMultiFileReader : public MultiFileReader {
 
 	void CreateNameMapping(const string &file_name, const vector<LogicalType> &local_types,
 	                       const vector<string> &local_names, const vector<LogicalType> &global_types,
-	                       const vector<string> &global_names, const vector<column_t> &global_column_ids,
+	                       const vector<string> &global_names, const vector<ColumnIndex> &global_column_ids,
 	                       MultiFileReaderData &reader_data, const string &initial_file,
 	                       optional_ptr<MultiFileReaderGlobalState> global_state) override;
 
@@ -141,12 +141,12 @@ struct DeltaMultiFileReader : public MultiFileReader {
 	InitializeGlobalState(ClientContext &context, const MultiFileReaderOptions &file_options,
 	                      const MultiFileReaderBindData &bind_data, const MultiFileList &file_list,
 	                      const vector<LogicalType> &global_types, const vector<string> &global_names,
-	                      const vector<column_t> &global_column_ids) override;
+	                      const vector<ColumnIndex> &global_column_ids) override;
 
 	void FinalizeBind(const MultiFileReaderOptions &file_options, const MultiFileReaderBindData &options,
 	                  const string &filename, const vector<string> &local_names,
 	                  const vector<LogicalType> &global_types, const vector<string> &global_names,
-	                  const vector<column_t> &global_column_ids, MultiFileReaderData &reader_data,
+	                  const vector<ColumnIndex> &global_column_ids, MultiFileReaderData &reader_data,
 	                  ClientContext &context, optional_ptr<MultiFileReaderGlobalState> global_state) override;
 
 	//! Override the FinalizeChunk method
