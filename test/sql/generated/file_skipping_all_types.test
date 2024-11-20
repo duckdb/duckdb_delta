@@ -21,6 +21,16 @@ WHERE
 ----
 analyzed_plan	<REGEX>:.*File Filters:.*value1>0.5.*value2>2.5.*value3<3.5.*Scanning Files: 1/5.*
 
+query III
+SELECT value1, value2, value3
+FROM delta_scan('./data/generated/test_file_skipping/${type}/delta_lake')
+WHERE
+    value1 > 0.5 and
+    value2 > 2.5 and
+    value3 < 3.5
+----
+3.0	3.0	3.0
+
 # FIXME: Partition columns currently don't cause file skipping yet
 query II
 EXPLAIN ANALYZE SELECT part
@@ -60,6 +70,16 @@ WHERE
 ----
 analyzed_plan	<REGEX>:.*File Filters:.*value1>1.*value2>2.*value3<4.*Scanning Files: 1/5.*
 
+query III
+SELECT value1, value2, value3
+FROM delta_scan('./data/generated/test_file_skipping/${type}/delta_lake')
+WHERE
+    value1 > 1 and
+    value2 > 2 and
+    value3 < 4
+----
+3	3	3
+
 # FIXME: Partition columns currently don't cause file skipping yet
 query II
 EXPLAIN ANALYZE SELECT part
@@ -81,10 +101,34 @@ WHERE
 ----
 analyzed_plan	<REGEX>:.*File Filters:.*value1='2'.*value2='2'.*value3='2'.*Scanning Files: 1/5.*
 
+query III
+SELECT value1, value2, value3
+FROM delta_scan('./data/generated/test_file_skipping/varchar/delta_lake')
+WHERE
+    value1 = '2' and
+    value2 = '2' and
+    value3 = '2'
+----
+2	2	2
+
 # FIXME: Partition columns currently don't cause file skipping yet
 query II
 EXPLAIN ANALYZE SELECT part
 FROM delta_scan('./data/generated/test_file_skipping/varchar/delta_lake')
 WHERE part = '0'
+----
+analyzed_plan	<!REGEX>:.*File Filters:.*
+
+# We can remove this from output if precise operator timing is crucial
+statement ok
+set delta_scan_explain_files_filtered = false;
+
+query II
+EXPLAIN ANALYZE SELECT value1, value2, value3
+FROM delta_scan('./data/generated/test_file_skipping/varchar/delta_lake')
+WHERE
+    value1 = '2' and
+    value2 = '2' and
+    value3 = '2'
 ----
 analyzed_plan	<!REGEX>:.*File Filters:.*

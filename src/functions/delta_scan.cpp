@@ -543,40 +543,45 @@ unique_ptr<MultiFileList> DeltaSnapshot::ComplexFilterPushdown(ClientContext &co
 	// file lists Therefore this is only done when profile is enabled. This is enable by default in debug mode or for
 	// EXPLAIN ANALYZE queries
 	if (profiler.IsEnabled()) {
-		auto old_total = GetTotalFileCount();
-		auto new_total = filtered_list->GetTotalFileCount();
+		Value result;
+		if (!context.TryGetCurrentSetting("delta_scan_explain_files_filtered", result)) {
+			throw InternalException("Failed to find 'delta_scan_explain_files_filtered' option!");
+		} else if (result.GetValue<bool>()) {
+			auto old_total = GetTotalFileCount();
+			auto new_total = filtered_list->GetTotalFileCount();
 
-		if (old_total != new_total) {
-			string filters_info;
-			bool first_item = true;
-			for (auto &f : filtered_list->table_filters.filters) {
-				auto &column_index = f.first;
-				auto &filter = f.second;
-				if (column_index < names.size()) {
-					if (!first_item) {
-						filters_info += "\n";
+			if (old_total != new_total) {
+				string filters_info;
+				bool first_item = true;
+				for (auto &f : filtered_list->table_filters.filters) {
+					auto &column_index = f.first;
+					auto &filter = f.second;
+					if (column_index < names.size()) {
+						if (!first_item) {
+							filters_info += "\n";
+						}
+						first_item = false;
+						auto &col_name = names[column_index];
+						filters_info += filter->ToString(col_name);
 					}
-					first_item = false;
-					auto &col_name = names[column_index];
-					filters_info += filter->ToString(col_name);
 				}
+
+				info.extra_info.file_filters = filters_info;
 			}
 
-			info.extra_info.file_filters = filters_info;
-		}
+			if (!info.extra_info.total_files.IsValid()) {
+				info.extra_info.total_files = old_total;
+			} else if (info.extra_info.total_files.GetIndex() < old_total) {
+				throw InternalException(
+				    "Error encountered when analyzing filtered out files for delta scan: total_files inconsistent!");
+			}
 
-		if (!info.extra_info.total_files.IsValid()) {
-			info.extra_info.total_files = old_total;
-		} else if (info.extra_info.total_files.GetIndex() < old_total) {
-			throw InternalException(
-			    "Error encountered when analyzing filtered out files for delta scan: total_files inconsistent!");
-		}
-
-		if (!info.extra_info.filtered_files.IsValid() || info.extra_info.filtered_files.GetIndex() >= new_total) {
-			info.extra_info.filtered_files = new_total;
-		} else {
-			throw InternalException(
-			    "Error encountered when analyzing filtered out files for delta scan: filtered_files inconsistent!");
+			if (!info.extra_info.filtered_files.IsValid() || info.extra_info.filtered_files.GetIndex() >= new_total) {
+				info.extra_info.filtered_files = new_total;
+			} else {
+				throw InternalException(
+				    "Error encountered when analyzing filtered out files for delta scan: filtered_files inconsistent!");
+			}
 		}
 	}
 
