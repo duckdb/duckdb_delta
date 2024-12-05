@@ -3,8 +3,8 @@
 #include <cstdarg>
 #include <cstdint>
 #include <cstdlib>
-#include <new>
 #include <ostream>
+#include <new>
 
 namespace ffi {
 
@@ -40,6 +40,7 @@ enum class KernelError {
 	MalformedJsonError,
 	MissingMetadataError,
 	MissingProtocolError,
+	InvalidProtocolError,
 	MissingMetadataAndProtocolError,
 	ParseError,
 	JoinFailureError,
@@ -52,6 +53,12 @@ enum class KernelError {
 	InternalError,
 	InvalidExpression,
 	InvalidLogPath,
+	InvalidCommitInfo,
+	FileAlreadyExists,
+	MissingCommitInfo,
+	UnsupportedError,
+	ParseIntervalError,
+	ChangeDataFeedUnsupported,
 };
 
 struct CStringMap;
@@ -72,6 +79,8 @@ struct ExclusiveEngineData;
 struct ExclusiveFileReadResultIterator;
 
 struct KernelExpressionVisitorState;
+
+struct SharedExpression;
 
 struct SharedExternEngine;
 
@@ -179,19 +188,20 @@ struct ExternResult {
 /// Intentionally not Copy, Clone, Send, nor Sync.
 ///
 /// Whoever instantiates the struct must ensure it does not outlive the data it points to. The
-/// compiler cannot help us here, because raw pointers don't have lifetimes. To reduce the risk of
-/// accidental misuse, it is recommended to only instantiate this struct as a function arg, by
-/// converting a string slice `Into` a `KernelStringSlice`. That way, the borrowed reference at call
-/// site protects the `KernelStringSlice` until the function returns. Meanwhile, the callee should
-/// assume that the slice is only valid until the function returns, and must not retain any
-/// references to the slice or its data that could outlive the function call.
+/// compiler cannot help us here, because raw pointers don't have lifetimes. A good rule of thumb is
+/// to always use the [`kernel_string_slice`] macro to create string slices, and to avoid returning
+/// a string slice from a code block or function (since the move risks over-extending its lifetime):
 ///
+/// ```ignore
+/// # // Ignored because this code is pub(crate) and doc tests cannot compile it
+/// let dangling_slice = {
+///     let tmp = String::from("tmp");
+///     kernel_string_slice!(tmp)
+/// }
 /// ```
-/// # use delta_kernel_ffi::KernelStringSlice;
-/// fn wants_slice(slice: KernelStringSlice) { }
-/// let msg = String::from("hello");
-/// wants_slice(msg.into());
-/// ```
+///
+/// Meanwhile, the callee must assume that the slice is only valid until the function returns, and
+/// must not retain any references to the slice or its data that might outlive the function call.
 struct KernelStringSlice {
 	const char *ptr;
 	uintptr_t len;
@@ -204,22 +214,6 @@ using NullableCvoid = void *;
 /// Allow engines to allocate strings of their own type. the contract of calling a passed allocate
 /// function is that `kernel_str` is _only_ valid until the return from this function
 using AllocateStringFn = NullableCvoid (*)(KernelStringSlice kernel_str);
-
-struct FileMeta {
-	KernelStringSlice path;
-	int64_t last_modified;
-	uintptr_t size;
-};
-
-/// Model iterators. This allows an engine to specify iteration however it likes, and we simply wrap
-/// the engine functions. The engine retains ownership of the iterator.
-struct EngineIterator {
-	void *data;
-	/// A function that should advance the iterator and return the next time from the data
-	/// If the iterator is complete, it should return null. It should be safe to
-	/// call `get_next()` multiple times if it returns null.
-	const void *(*get_next)(void *data);
-};
 
 /// ABI-compatible struct for ArrowArray from C Data Interface
 /// See <https://arrow.apache.org/docs/format/CDataInterface.html#structure-definitions>
@@ -278,6 +272,182 @@ struct ArrowFFIData {
 };
 #endif
 
+struct FileMeta {
+	KernelStringSlice path;
+	int64_t last_modified;
+	uintptr_t size;
+};
+
+/// Model iterators. This allows an engine to specify iteration however it likes, and we simply wrap
+/// the engine functions. The engine retains ownership of the iterator.
+struct EngineIterator {
+	void *data;
+	/// A function that should advance the iterator and return the next time from the data
+	/// If the iterator is complete, it should return null. It should be safe to
+	/// call `get_next()` multiple times if it returns null.
+	const void *(*get_next)(void *data);
+};
+
+template <typename T>
+using VisitLiteralFn = void (*)(void *data, uintptr_t sibling_list_id, T value);
+
+using VisitVariadicFn = void (*)(void *data, uintptr_t sibling_list_id, uintptr_t child_list_id);
+
+using VisitUnaryFn = void (*)(void *data, uintptr_t sibling_list_id, uintptr_t child_list_id);
+
+using VisitBinaryOpFn = void (*)(void *data, uintptr_t sibling_list_id, uintptr_t child_list_id);
+
+/// The [`EngineExpressionVisitor`] defines a visitor system to allow engines to build their own
+/// representation of a kernel expression.
+///
+/// The model is list based. When the kernel needs a list, it will ask engine to allocate one of a
+/// particular size. Once allocated the engine returns an `id`, which can be any integer identifier
+/// ([`usize`]) the engine wants, and will be passed back to the engine to identify the list in the
+/// future.
+///
+/// Every expression the kernel visits belongs to some list of "sibling" elements. The schema
+/// itself is a list of schema elements, and every complex type (struct expression, array, variadic, etc)
+/// contains a list of "child" elements.
+///  1. Before visiting any complex expression type, the kernel asks the engine to allocate a list to
+///     hold its children
+///  2. When visiting any expression element, the kernel passes its parent's "child list" as the
+///     "sibling list" the element should be appended to:
+///      - For a struct literal, first visit each struct field and visit each value
+///      - For a struct expression, visit each sub expression.
+///      - For an array literal, visit each of the elements.
+///      - For a variadic `and` or `or` expression, visit each sub-expression.
+///      - For a binary operator expression, visit the left and right operands.
+///      - For a unary `is null` or `not` expression, visit the sub-expression.
+///  3. When visiting a complex expression, the kernel also passes the "child list" containing
+///     that element's (already-visited) children.
+///  4. The [`visit_expression`] method returns the id of the list of top-level columns
+///
+/// WARNING: The visitor MUST NOT retain internal references to string slices or binary data passed
+/// to visitor methods
+/// TODO: Visit type information in struct field and null. This will likely involve using the schema
+/// visitor. Note that struct literals are currently in flux, and may change significantly. Here is the relevant
+/// issue: https://github.com/delta-io/delta-kernel-rs/issues/412
+struct EngineExpressionVisitor {
+	/// An opaque engine state pointer
+	void *data;
+	/// Creates a new expression list, optionally reserving capacity up front
+	uintptr_t (*make_field_list)(void *data, uintptr_t reserve);
+	/// Visit a 32bit `integer` belonging to the list identified by `sibling_list_id`.
+	VisitLiteralFn<int32_t> visit_literal_int;
+	/// Visit a 64bit `long`  belonging to the list identified by `sibling_list_id`.
+	VisitLiteralFn<int64_t> visit_literal_long;
+	/// Visit a 16bit `short` belonging to the list identified by `sibling_list_id`.
+	VisitLiteralFn<int16_t> visit_literal_short;
+	/// Visit an 8bit `byte` belonging to the list identified by `sibling_list_id`.
+	VisitLiteralFn<int8_t> visit_literal_byte;
+	/// Visit a 32bit `float` belonging to the list identified by `sibling_list_id`.
+	VisitLiteralFn<float> visit_literal_float;
+	/// Visit a 64bit `double` belonging to the list identified by `sibling_list_id`.
+	VisitLiteralFn<double> visit_literal_double;
+	/// Visit a `string` belonging to the list identified by `sibling_list_id`.
+	VisitLiteralFn<KernelStringSlice> visit_literal_string;
+	/// Visit a `boolean` belonging to the list identified by `sibling_list_id`.
+	VisitLiteralFn<bool> visit_literal_bool;
+	/// Visit a 64bit timestamp belonging to the list identified by `sibling_list_id`.
+	/// The timestamp is microsecond precision and adjusted to UTC.
+	VisitLiteralFn<int64_t> visit_literal_timestamp;
+	/// Visit a 64bit timestamp belonging to the list identified by `sibling_list_id`.
+	/// The timestamp is microsecond precision with no timezone.
+	VisitLiteralFn<int64_t> visit_literal_timestamp_ntz;
+	/// Visit a 32bit intger `date` representing days since UNIX epoch 1970-01-01.  The `date` belongs
+	/// to the list identified by `sibling_list_id`.
+	VisitLiteralFn<int32_t> visit_literal_date;
+	/// Visit binary data at the `buffer` with length `len` belonging to the list identified by
+	/// `sibling_list_id`.
+	void (*visit_literal_binary)(void *data, uintptr_t sibling_list_id, const uint8_t *buffer, uintptr_t len);
+	/// Visit a 128bit `decimal` value with the given precision and scale. The 128bit integer
+	/// is split into the most significant 64 bits in `value_ms`, and the least significant 64
+	/// bits in `value_ls`. The `decimal` belongs to the list identified by `sibling_list_id`.
+	void (*visit_literal_decimal)(void *data, uintptr_t sibling_list_id, uint64_t value_ms, uint64_t value_ls,
+	                              uint8_t precision, uint8_t scale);
+	/// Visit a struct literal belonging to the list identified by `sibling_list_id`.
+	/// The field names of the struct are in a list identified by `child_field_list_id`.
+	/// The values of the struct are in a list identified by `child_value_list_id`.
+	void (*visit_literal_struct)(void *data, uintptr_t sibling_list_id, uintptr_t child_field_list_id,
+	                             uintptr_t child_value_list_id);
+	/// Visit an array literal belonging to the list identified by `sibling_list_id`.
+	/// The values of the array are in a list identified by `child_list_id`.
+	void (*visit_literal_array)(void *data, uintptr_t sibling_list_id, uintptr_t child_list_id);
+	/// Visits a null value belonging to the list identified by `sibling_list_id.
+	void (*visit_literal_null)(void *data, uintptr_t sibling_list_id);
+	/// Visits an `and` expression belonging to the list identified by `sibling_list_id`.
+	/// The sub-expressions of the array are in a list identified by `child_list_id`
+	VisitVariadicFn visit_and;
+	/// Visits an `or` expression belonging to the list identified by `sibling_list_id`.
+	/// The sub-expressions of the array are in a list identified by `child_list_id`
+	VisitVariadicFn visit_or;
+	/// Visits a `not` expression belonging to the list identified by `sibling_list_id`.
+	/// The sub-expression will be in a _one_ item list identified by `child_list_id`
+	VisitUnaryFn visit_not;
+	/// Visits a `is_null` expression belonging to the list identified by `sibling_list_id`.
+	/// The sub-expression will be in a _one_ item list identified by `child_list_id`
+	VisitUnaryFn visit_is_null;
+	/// Visits the `LessThan` binary operator belonging to the list identified by `sibling_list_id`.
+	/// The operands will be in a _two_ item list identified by `child_list_id`
+	VisitBinaryOpFn visit_lt;
+	/// Visits the `LessThanOrEqual` binary operator belonging to the list identified by `sibling_list_id`.
+	/// The operands will be in a _two_ item list identified by `child_list_id`
+	VisitBinaryOpFn visit_le;
+	/// Visits the `GreaterThan` binary operator belonging to the list identified by `sibling_list_id`.
+	/// The operands will be in a _two_ item list identified by `child_list_id`
+	VisitBinaryOpFn visit_gt;
+	/// Visits the `GreaterThanOrEqual` binary operator belonging to the list identified by `sibling_list_id`.
+	/// The operands will be in a _two_ item list identified by `child_list_id`
+	VisitBinaryOpFn visit_ge;
+	/// Visits the `Equal` binary operator belonging to the list identified by `sibling_list_id`.
+	/// The operands will be in a _two_ item list identified by `child_list_id`
+	VisitBinaryOpFn visit_eq;
+	/// Visits the `NotEqual` binary operator belonging to the list identified by `sibling_list_id`.
+	/// The operands will be in a _two_ item list identified by `child_list_id`
+	VisitBinaryOpFn visit_ne;
+	/// Visits the `Distinct` binary operator belonging to the list identified by `sibling_list_id`.
+	/// The operands will be in a _two_ item list identified by `child_list_id`
+	VisitBinaryOpFn visit_distinct;
+	/// Visits the `In` binary operator belonging to the list identified by `sibling_list_id`.
+	/// The operands will be in a _two_ item list identified by `child_list_id`
+	VisitBinaryOpFn visit_in;
+	/// Visits the `NotIn` binary operator belonging to the list identified by `sibling_list_id`.
+	/// The operands will be in a _two_ item list identified by `child_list_id`
+	VisitBinaryOpFn visit_not_in;
+	/// Visits the `Add` binary operator belonging to the list identified by `sibling_list_id`.
+	/// The operands will be in a _two_ item list identified by `child_list_id`
+	VisitBinaryOpFn visit_add;
+	/// Visits the `Minus` binary operator belonging to the list identified by `sibling_list_id`.
+	/// The operands will be in a _two_ item list identified by `child_list_id`
+	VisitBinaryOpFn visit_minus;
+	/// Visits the `Multiply` binary operator belonging to the list identified by `sibling_list_id`.
+	/// The operands will be in a _two_ item list identified by `child_list_id`
+	VisitBinaryOpFn visit_multiply;
+	/// Visits the `Divide` binary operator belonging to the list identified by `sibling_list_id`.
+	/// The operands will be in a _two_ item list identified by `child_list_id`
+	VisitBinaryOpFn visit_divide;
+	/// Visits the `column` belonging to the list identified by `sibling_list_id`.
+	void (*visit_column)(void *data, uintptr_t sibling_list_id, KernelStringSlice name);
+	/// Visits a `StructExpression` belonging to the list identified by `sibling_list_id`.
+	/// The sub-expressions of the `StructExpression` are in a list identified by `child_list_id`
+	void (*visit_struct_expr)(void *data, uintptr_t sibling_list_id, uintptr_t child_list_id);
+};
+
+// This trickery is from https://github.com/mozilla/cbindgen/issues/402#issuecomment-578680163
+struct im_an_unused_struct_that_tricks_msvc_into_compilation {
+	ExternResult<KernelBoolSlice> field;
+	ExternResult<bool> field2;
+	ExternResult<EngineBuilder *> field3;
+	ExternResult<Handle<SharedExternEngine>> field4;
+	ExternResult<Handle<SharedSnapshot>> field5;
+	ExternResult<uintptr_t> field6;
+	ExternResult<ArrowFFIData *> field7;
+	ExternResult<Handle<SharedScanDataIterator>> field8;
+	ExternResult<Handle<SharedScan>> field9;
+	ExternResult<Handle<ExclusiveFileReadResultIterator>> field10;
+	ExternResult<KernelRowIndexArray> field11;
+};
+
 /// A predicate that can be used to skip data when scanning.
 ///
 /// When invoking [`scan::scan`], The engine provides a pointer to the (engine's native) predicate,
@@ -304,21 +474,6 @@ struct Stats {
 
 using CScanCallback = void (*)(NullableCvoid engine_context, KernelStringSlice path, int64_t size, const Stats *stats,
                                const DvInfo *dv_info, const CStringMap *partition_map);
-
-// This trickery is from https://github.com/mozilla/cbindgen/issues/402#issuecomment-578680163
-struct im_an_unused_struct_that_tricks_msvc_into_compilation {
-	ExternResult<KernelBoolSlice> field;
-	ExternResult<bool> field2;
-	ExternResult<EngineBuilder *> field3;
-	ExternResult<Handle<SharedExternEngine>> field4;
-	ExternResult<Handle<SharedSnapshot>> field5;
-	ExternResult<uintptr_t> field6;
-	ExternResult<ArrowFFIData *> field7;
-	ExternResult<Handle<SharedScanDataIterator>> field8;
-	ExternResult<Handle<SharedScan>> field9;
-	ExternResult<Handle<ExclusiveFileReadResultIterator>> field10;
-	ExternResult<KernelRowIndexArray> field11;
-};
 
 /// The `EngineSchemaVisitor` defines a visitor system to allow engines to build their own
 /// representation of a schema from a particular schema within kernel.
@@ -498,6 +653,32 @@ bool string_slice_next(Handle<StringSliceIterator> data, NullableCvoid engine_co
 /// Caller is responsible for (at most once) passing a valid pointer to a [`StringSliceIterator`]
 void free_string_slice_data(Handle<StringSliceIterator> data);
 
+/// Get the number of rows in an engine data
+///
+/// # Safety
+/// `data_handle` must be a valid pointer to a kernel allocated `ExclusiveEngineData`
+uintptr_t engine_data_length(Handle<ExclusiveEngineData> *data);
+
+/// Allow an engine to "unwrap" an [`ExclusiveEngineData`] into the raw pointer for the case it wants
+/// to use its own engine data format
+///
+/// # Safety
+///
+/// `data_handle` must be a valid pointer to a kernel allocated `ExclusiveEngineData`. The Engine must
+/// ensure the handle outlives the returned pointer.
+void *get_raw_engine_data(Handle<ExclusiveEngineData> data);
+
+#if defined(DEFINE_DEFAULT_ENGINE)
+/// Get an [`ArrowFFIData`] to allow binding to the arrow [C Data
+/// Interface](https://arrow.apache.org/docs/format/CDataInterface.html). This includes the data and
+/// the schema. If this function returns an `Ok` variant the _engine_ must free the returned struct.
+///
+/// # Safety
+/// data_handle must be a valid ExclusiveEngineData as read by the
+/// [`delta_kernel::engine::default::DefaultEngine`] obtained from `get_default_engine`.
+ExternResult<ArrowFFIData *> get_raw_arrow_data(Handle<ExclusiveEngineData> data, Handle<SharedExternEngine> engine);
+#endif
+
 /// Call the engine back with the next `EngingeData` batch read by Parquet/Json handler. The
 /// _engine_ "owns" the data that is passed into the `engine_visitor`, since it is allocated by the
 /// `Engine` being used for log-replay. If the engine wants the kernel to free this data, it _must_
@@ -565,38 +746,31 @@ uintptr_t visit_expression_literal_double(KernelExpressionVisitorState *state, d
 
 uintptr_t visit_expression_literal_bool(KernelExpressionVisitorState *state, bool value);
 
-/// Get the number of rows in an engine data
+/// Free the memory the passed SharedExpression
 ///
 /// # Safety
-/// `data_handle` must be a valid pointer to a kernel allocated `ExclusiveEngineData`
-uintptr_t engine_data_length(Handle<ExclusiveEngineData> *data);
+/// Engine is responsible for passing a valid SharedExpression
+void free_kernel_predicate(Handle<SharedExpression> data);
 
-/// Allow an engine to "unwrap" an [`ExclusiveEngineData`] into the raw pointer for the case it wants
-/// to use its own engine data format
+/// Visit the expression of the passed [`SharedExpression`] Handle using the provided `visitor`.
+/// See the documentation of [`EngineExpressionVisitor`] for a description of how this visitor
+/// works.
+///
+/// This method returns the id that the engine generated for the top level expression
 ///
 /// # Safety
 ///
-/// `data_handle` must be a valid pointer to a kernel allocated `ExclusiveEngineData`. The Engine must
-/// ensure the handle outlives the returned pointer.
-void *get_raw_engine_data(Handle<ExclusiveEngineData> data);
-
-#if defined(DEFINE_DEFAULT_ENGINE)
-/// Get an [`ArrowFFIData`] to allow binding to the arrow [C Data
-/// Interface](https://arrow.apache.org/docs/format/CDataInterface.html). This includes the data and
-/// the schema.
-///
-/// # Safety
-/// data_handle must be a valid ExclusiveEngineData as read by the
-/// [`delta_kernel::engine::default::DefaultEngine`] obtained from `get_default_engine`.
-ExternResult<ArrowFFIData *> get_raw_arrow_data(Handle<ExclusiveEngineData> data, Handle<SharedExternEngine> engine);
-#endif
+/// The caller must pass a valid SharedExpression Handle and expression visitor
+uintptr_t visit_expression(const Handle<SharedExpression> *expression, EngineExpressionVisitor *visitor);
 
 /// Drops a scan.
 /// # Safety
 /// Caller is responsible for passing a [valid][Handle#Validity] scan handle.
 void free_scan(Handle<SharedScan> scan);
 
-/// Get a [`Scan`] over the table specified by the passed snapshot.
+/// Get a [`Scan`] over the table specified by the passed snapshot. It is the responsibility of the
+/// _engine_ to free this scan when complete by calling [`free_scan`].
+///
 /// # Safety
 ///
 /// Caller is responsible for passing a valid snapshot pointer, and engine pointer
@@ -650,6 +824,10 @@ void free_global_scan_state(Handle<SharedGlobalScanState> state);
 ExternResult<Handle<SharedScanDataIterator>> kernel_scan_data_init(Handle<SharedExternEngine> engine,
                                                                    Handle<SharedScan> scan);
 
+/// Call the provided `engine_visitor` on the next scan data item. The visitor will be provided with
+/// a selection vector and engine data. It is the responsibility of the _engine_ to free these when
+/// it is finished by calling [`free_bool_slice`] and [`free_engine_data`] respectively.
+///
 /// # Safety
 ///
 /// The iterator must be valid (returned by [kernel_scan_data_init]) and not yet freed by
@@ -705,6 +883,14 @@ void visit_scan_data(Handle<ExclusiveEngineData> data, KernelBoolSlice selection
 ///
 /// Caller is responsible for passing a valid snapshot handle and schema visitor.
 uintptr_t visit_schema(Handle<SharedSnapshot> snapshot, EngineSchemaVisitor *visitor);
+
+/// Constructs a kernel expression that is passed back as a SharedExpression handle. The expected
+/// output expression can be found in `ffi/tests/test_expression_visitor/expected.txt`.
+///
+/// # Safety
+/// The caller is responsible for freeing the retured memory, either by calling
+/// [`free_kernel_predicate`], or [`Handle::drop_handle`]
+Handle<SharedExpression> get_testing_kernel_expression();
 
 } // extern "C"
 
