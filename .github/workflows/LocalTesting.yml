@@ -14,7 +14,6 @@ jobs:
   azurite-tests-linux:
     name: Azurite (local azure test server) tests (Linux)
     runs-on: ubuntu-latest
-    container: 'quay.io/pypa/manylinux2014_x86_64'
     env:
       VCPKG_TARGET_TRIPLET: 'x64-linux'
       GEN: Ninja
@@ -29,26 +28,32 @@ jobs:
         fetch-depth: 0
         submodules: 'true'
 
-    - name: install Azure test service
-      run: |
-        yum install -y nodejs npm
-        npm install -g azurite
-        echo -e "[azure-cli]\nname=Azure CLI\nbaseurl=https://packages.microsoft.com/yumrepos/azure-cli\nenabled=1\ngpgcheck=1\ngpgkey=https://packages.microsoft.com/keys/microsoft.asc" | tee /etc/yum.repos.d/azure-cli.repo
-        yum install -y azure-cli
+    - name: Install Ninja
+      shell: bash
+      run: sudo apt-get update -y -qq && sudo apt-get install -y -qq ninja-build
 
-    - name: Setup ManyLinux2014
-      run: |
-        ./duckdb/scripts/setup_manylinux2014.sh general aws-cli ccache ssh python_alias openssl
-
-    - name: Setup Rust for manylinux (dtolnay/rust-toolchain doesn't work due to curl being old here)
-      run: |
-        curl --proto '=https' --tlsv1.2 -sSf https://sh.rustup.rs | sh -s -- -y
-        echo "$HOME/.cargo/bin" >> $GITHUB_PATH
+    - name: Setup Ccache
+      uses: hendrikmuhs/ccache-action@main
+      with:
+        key: ${{ github.job }}
 
     - name: Setup vcpkg
       uses: lukka/run-vcpkg@v11.1
       with:
         vcpkgGitCommitId: a1a1cbc975abf909a6c8985a6a2b8fe20bbd9bd6
+
+    - uses: actions/setup-node@v4
+
+    - name: install Azure test service
+      run: |
+        npm install -g azurite
+        echo -e "[azure-cli]\nname=Azure CLI\nbaseurl=https://packages.microsoft.com/yumrepos/azure-cli\nenabled=1\ngpgcheck=1\ngpgkey=https://packages.microsoft.com/keys/microsoft.asc" | tee /etc/yum.repos.d/azure-cli.repo
+        sudo apt-get install -y azure-cli 
+
+    - name: Setup Rust for manylinux (dtolnay/rust-toolchain doesn't work due to curl being old here)
+      run: |
+        curl --proto '=https' --tlsv1.2 -sSf https://sh.rustup.rs | sh -s -- -y
+        echo "$HOME/.cargo/bin" >> $GITHUB_PATH
 
     - name: Handle OpenSSL dependency for rust build
       run: |
