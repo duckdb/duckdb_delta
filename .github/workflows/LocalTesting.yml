@@ -47,7 +47,6 @@ jobs:
     - name: install Azure test service
       run: |
         npm install -g azurite
-        echo -e "[azure-cli]\nname=Azure CLI\nbaseurl=https://packages.microsoft.com/yumrepos/azure-cli\nenabled=1\ngpgcheck=1\ngpgkey=https://packages.microsoft.com/keys/microsoft.asc" | tee /etc/yum.repos.d/azure-cli.repo
         sudo apt-get install -y azure-cli 
 
     - name: Setup Rust for manylinux (dtolnay/rust-toolchain doesn't work due to curl being old here)
