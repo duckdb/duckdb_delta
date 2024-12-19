@@ -1,0 +1,100 @@
+# name: test/sql/generated/attach_parallel.test
+# description: Test attaching a delta table and reading from it in parallel
+# group: [dat]
+
+require parquet
+
+require delta
+
+require-env GENERATED_DATA_AVAILABLE
+
+statement ok
+pragma threads=10;
+
+statement ok
+ATTACH 'data/generated/simple_partitioned/delta_lake/' as dt (TYPE delta)
+
+statement ok
+ATTACH 'data/generated/simple_partitioned/delta_lake/' as dt_pinned (TYPE delta, PIN_SNAPSHOT)
+
+concurrentloop threadid 0 20
+
+query I
+WITH RECURSIVE ctename AS (
+      SELECT *, 1 as recursiondepth
+      FROM dt
+   UNION ALL
+      SELECT * EXCLUDE (c2.recursiondepth), c2.recursiondepth + 1 as recursiondepth
+      FROM ctename as c2
+      WHERE c2.recursiondepth < 8
+)
+SELECT count(i) FROM ctename;
+----
+80
+
+query I
+WITH RECURSIVE ctename AS (
+      SELECT *, 1 as recursiondepth
+      FROM dt_pinned
+   UNION ALL
+      SELECT * EXCLUDE (c2.recursiondepth), c2.recursiondepth + 1 as recursiondepth
+      FROM ctename as c2
+      WHERE c2.recursiondepth < 8
+)
+SELECT count(i) FROM ctename;
+----
+80
+
+endloop
+
+concurrentloop threadid 0 20
+
+query I
+SELECT count(i) FROM dt UNION ALL
+SELECT count(i) FROM dt UNION ALL
+SELECT count(i) FROM dt UNION ALL
+SELECT count(i) FROM dt UNION ALL
+SELECT count(i) FROM dt UNION ALL
+SELECT count(i) FROM dt UNION ALL
+SELECT count(i) FROM dt UNION ALL
+SELECT count(i) FROM dt UNION ALL
+SELECT count(i) FROM dt UNION ALL
+SELECT count(i) FROM dt
+----
+10
+10
+10
+10
+10
+10
+10
+10
+10
+10
+
+query I
+SELECT count(i) FROM dt_pinned UNION ALL
+SELECT count(i) FROM dt_pinned UNION ALL
+SELECT count(i) FROM dt_pinned UNION ALL
+SELECT count(i) FROM dt_pinned UNION ALL
+SELECT count(i) FROM dt_pinned UNION ALL
+SELECT count(i) FROM dt_pinned UNION ALL
+SELECT count(i) FROM dt_pinned UNION ALL
+SELECT count(i) FROM dt_pinned UNION ALL
+SELECT count(i) FROM dt_pinned UNION ALL
+SELECT count(i) FROM dt_pinned
+----
+10
+10
+10
+10
+10
+10
+10
+10
+10
+10
+
+
+
+endloop
