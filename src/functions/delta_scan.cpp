@@ -1,4 +1,5 @@
 #include "functions/delta_scan.hpp"
+#include "storage/delta_catalog.hpp"
 
 #include "delta_functions.hpp"
 #include "duckdb/catalog/catalog_entry/table_function_catalog_entry.hpp"
@@ -16,13 +17,9 @@
 #include "duckdb/planner/binder.hpp"
 #include "duckdb/planner/operator/logical_get.hpp"
 #include "duckdb/main/query_profiler.hpp"
+#include "duckdb/main/client_data.hpp"
 
-#include <duckdb/main/client_data.hpp>
-#include <numeric>
 #include <regex>
-#include <duckdb/main/attached_database.hpp>
-#include <duckdb/main/client_data.hpp>
-#include <storage/delta_catalog.hpp>
 
 namespace duckdb {
 
@@ -473,11 +470,6 @@ string DeltaSnapshot::GetFile(idx_t i) {
 		}
 	}
 
-	// The kernel scan visitor should have resolved a file OR returned
-	if (i >= resolved_files.size()) {
-		throw IOException("Delta Kernel seems to have failed to resolve a new file");
-	}
-
 	return resolved_files[i];
 }
 
@@ -770,7 +762,6 @@ static SelectionVector DuckSVFromDeltaSV(const ffi::KernelBoolSlice &dv, Vector 
 	for (idx_t i = 0; i < count; i++) {
 		auto row_id = row_ids[data.sel->get_index(i)];
 
-		// TODO: why are deletion vectors not spanning whole data?
 		if (row_id >= dv.len || dv.ptr[row_id]) {
 			result.data()[current_select] = i;
 			current_select++;
