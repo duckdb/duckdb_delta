@@ -278,13 +278,16 @@ static ffi::EngineBuilder *CreateBuilder(ClientContext &context, const string &p
 				}
 			}
 
-			if (StringUtil::StartsWith(endpoint, "http://")) {
-				ffi::set_builder_option(builder, KernelUtils::ToDeltaString("allow_http"),
-				                        KernelUtils::ToDeltaString("true"));
-			}
-			ffi::set_builder_option(builder, KernelUtils::ToDeltaString("aws_endpoint"),
-			                        KernelUtils::ToDeltaString(endpoint));
-		}
+	        if (StringUtil::StartsWith(endpoint, "http://")) {
+	            ffi::set_builder_option(builder, KernelUtils::ToDeltaString("allow_http"),
+                                        KernelUtils::ToDeltaString("true"));
+	        }
+	        ffi::set_builder_option(builder, KernelUtils::ToDeltaString("aws_endpoint"),
+                                    KernelUtils::ToDeltaString(endpoint));
+	    } else if (StringUtil::StartsWith(path, "gs://") || StringUtil::StartsWith(path, "gcs://")) {
+	        ffi::set_builder_option(builder, KernelUtils::ToDeltaString("aws_endpoint"),
+                                    KernelUtils::ToDeltaString("https://storage.googleapis.com"));
+	    }
 
 		ffi::set_builder_option(builder, KernelUtils::ToDeltaString("aws_region"), KernelUtils::ToDeltaString(region));
 
