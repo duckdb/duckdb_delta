@@ -1,4 +1,5 @@
 #include "functions/delta_scan.hpp"
+#include "storage/delta_catalog.hpp"
 
 #include "delta_functions.hpp"
 #include "duckdb/catalog/catalog_entry/table_function_catalog_entry.hpp"
@@ -16,13 +17,9 @@
 #include "duckdb/planner/binder.hpp"
 #include "duckdb/planner/operator/logical_get.hpp"
 #include "duckdb/main/query_profiler.hpp"
+#include "duckdb/main/client_data.hpp"
 
-#include <duckdb/main/client_data.hpp>
-#include <numeric>
 #include <regex>
-#include <duckdb/main/attached_database.hpp>
-#include <duckdb/main/client_data.hpp>
-#include <storage/delta_catalog.hpp>
 
 namespace duckdb {
 
@@ -49,7 +46,7 @@ string url_decode(string input) {
 	return result;
 }
 
-static void visit_callback(ffi::NullableCvoid engine_context, struct ffi::KernelStringSlice path, int64_t size,
+void DeltaSnapshot::VisitCallback(ffi::NullableCvoid engine_context, struct ffi::KernelStringSlice path, int64_t size,
                            const ffi::Stats *stats, const ffi::DvInfo *dv_info,
                            const struct ffi::CStringMap *partition_values) {
 	auto context = (DeltaSnapshot *)engine_context;
@@ -94,9 +91,9 @@ static void visit_callback(ffi::NullableCvoid engine_context, struct ffi::Kernel
 	context->metadata.back()->partition_map = std::move(constant_map);
 }
 
-static void visit_data(void *engine_context, ffi::ExclusiveEngineData *engine_data,
+void DeltaSnapshot::VisitData(void *engine_context, ffi::ExclusiveEngineData *engine_data,
                        const struct ffi::KernelBoolSlice selection_vec) {
-	ffi::visit_scan_data(engine_data, selection_vec, engine_context, visit_callback);
+	ffi::visit_scan_data(engine_data, selection_vec, engine_context, VisitCallback);
 }
 
 string ParseAccountNameFromEndpoint(const string &endpoint) {
@@ -241,50 +238,52 @@ static ffi::EngineBuilder *CreateBuilder(ClientContext &context, const string &p
 	// Here you would need to add the logic for setting the builder options for Azure
 	// This is just a placeholder and will need to be replaced with the actual logic
 	if (secret_type == "s3" || secret_type == "gcs" || secret_type == "r2") {
+	    string key_id, secret, session_token, region, endpoint, url_style;
+	    bool use_ssl = true;
+	    secret_reader.TryGetSecretKey("key_id", key_id);
+	    secret_reader.TryGetSecretKey("secret", secret);
+	    secret_reader.TryGetSecretKey("session_token", session_token);
+	    secret_reader.TryGetSecretKey("region", region);
+	    secret_reader.TryGetSecretKey("endpoint", endpoint);
+	    secret_reader.TryGetSecretKey("url_style", url_style);
+	    secret_reader.TryGetSecretKey("use_ssl", use_ssl);
 
-		string key_id, secret, session_token, region, endpoint, url_style;
-		bool use_ssl = true;
-		secret_reader.TryGetSecretKey("key_id", key_id);
-		secret_reader.TryGetSecretKey("secret", secret);
-		secret_reader.TryGetSecretKey("session_token", session_token);
-		secret_reader.TryGetSecretKey("region", region);
-		secret_reader.TryGetSecretKey("endpoint", endpoint);
-		secret_reader.TryGetSecretKey("url_style", url_style);
-		secret_reader.TryGetSecretKey("use_ssl", use_ssl);
+	    if (key_id.empty() && secret.empty()) {
+	        ffi::set_builder_option(builder, KernelUtils::ToDeltaString("skip_signature"),
+                                    KernelUtils::ToDeltaString("true"));
+	    }
 
-		if (key_id.empty() && secret.empty()) {
-			ffi::set_builder_option(builder, KernelUtils::ToDeltaString("skip_signature"),
-			                        KernelUtils::ToDeltaString("true"));
-		}
+	    if (!key_id.empty()) {
+	        ffi::set_builder_option(builder, KernelUtils::ToDeltaString("aws_access_key_id"),
+                                    KernelUtils::ToDeltaString(key_id));
+	    }
+	    if (!secret.empty()) {
+	        ffi::set_builder_option(builder, KernelUtils::ToDeltaString("aws_secret_access_key"),
+                                    KernelUtils::ToDeltaString(secret));
+	    }
+	    if (!session_token.empty()) {
+	        ffi::set_builder_option(builder, KernelUtils::ToDeltaString("aws_session_token"),
+                                    KernelUtils::ToDeltaString(session_token));
+	    }
+	    if (!endpoint.empty() && endpoint != "s3.amazonaws.com") {
+	        if (!StringUtil::StartsWith(endpoint, "https://") && !StringUtil::StartsWith(endpoint, "http://")) {
+	            if (use_ssl) {
+	                endpoint = "https://" + endpoint;
+	            } else {
+	                endpoint = "http://" + endpoint;
+	            }
+	        }
 
-		if (!key_id.empty()) {
-			ffi::set_builder_option(builder, KernelUtils::ToDeltaString("aws_access_key_id"),
-			                        KernelUtils::ToDeltaString(key_id));
-		}
-		if (!secret.empty()) {
-			ffi::set_builder_option(builder, KernelUtils::ToDeltaString("aws_secret_access_key"),
-			                        KernelUtils::ToDeltaString(secret));
-		}
-		if (!session_token.empty()) {
-			ffi::set_builder_option(builder, KernelUtils::ToDeltaString("aws_session_token"),
-			                        KernelUtils::ToDeltaString(session_token));
-		}
-		if (!endpoint.empty() && endpoint != "s3.amazonaws.com") {
-			if (!StringUtil::StartsWith(endpoint, "https://") && !StringUtil::StartsWith(endpoint, "http://")) {
-				if (use_ssl) {
-					endpoint = "https://" + endpoint;
-				} else {
-					endpoint = "http://" + endpoint;
-				}
-			}
-
-			if (StringUtil::StartsWith(endpoint, "http://")) {
-				ffi::set_builder_option(builder, KernelUtils::ToDeltaString("allow_http"),
-				                        KernelUtils::ToDeltaString("true"));
-			}
-			ffi::set_builder_option(builder, KernelUtils::ToDeltaString("aws_endpoint"),
-			                        KernelUtils::ToDeltaString(endpoint));
-		}
+	        if (StringUtil::StartsWith(endpoint, "http://")) {
+	            ffi::set_builder_option(builder, KernelUtils::ToDeltaString("allow_http"),
+                                        KernelUtils::ToDeltaString("true"));
+	        }
+	        ffi::set_builder_option(builder, KernelUtils::ToDeltaString("aws_endpoint"),
+                                    KernelUtils::ToDeltaString(endpoint));
+	    } else if (StringUtil::StartsWith(path, "gs://") || StringUtil::StartsWith(path, "gcs://")) {
+	        ffi::set_builder_option(builder, KernelUtils::ToDeltaString("aws_endpoint"),
+                                    KernelUtils::ToDeltaString("https://storage.googleapis.com"));
+	    }
 
 		ffi::set_builder_option(builder, KernelUtils::ToDeltaString("aws_region"), KernelUtils::ToDeltaString(region));
 
@@ -386,7 +385,7 @@ DeltaSnapshot::DeltaSnapshot(ClientContext &context_p, const string &path)
     : MultiFileList({ToDeltaPath(path)}, FileGlobOptions::ALLOW_EMPTY), context(context_p) {
 }
 
-string DeltaSnapshot::GetPath() {
+string DeltaSnapshot::GetPath() const {
 	return GetPaths()[0];
 }
 
@@ -416,6 +415,8 @@ string DeltaSnapshot::ToDeltaPath(const string &raw_path) {
 }
 
 void DeltaSnapshot::Bind(vector<LogicalType> &return_types, vector<string> &names) {
+    unique_lock<mutex> lck(lock);
+
 	if (have_bound) {
 		names = this->names;
 		return_types = this->types;
@@ -443,7 +444,7 @@ void DeltaSnapshot::Bind(vector<LogicalType> &return_types, vector<string> &name
 	this->types = return_types;
 }
 
-string DeltaSnapshot::GetFile(idx_t i) {
+string DeltaSnapshot::GetFileInternal(idx_t i) {
 	if (!initialized_snapshot) {
 		InitializeSnapshot();
 	}
@@ -462,7 +463,7 @@ string DeltaSnapshot::GetFile(idx_t i) {
 	}
 
 	while (i >= resolved_files.size()) {
-		auto have_scan_data_res = ffi::kernel_scan_data_next(scan_data_iterator.get(), this, visit_data);
+		auto have_scan_data_res = ffi::kernel_scan_data_next(scan_data_iterator.get(), this, VisitData);
 
 		auto have_scan_data = TryUnpackKernelResult(have_scan_data_res);
 
@@ -473,12 +474,13 @@ string DeltaSnapshot::GetFile(idx_t i) {
 		}
 	}
 
-	// The kernel scan visitor should have resolved a file OR returned
-	if (i >= resolved_files.size()) {
-		throw IOException("Delta Kernel seems to have failed to resolve a new file");
-	}
-
 	return resolved_files[i];
+}
+
+string DeltaSnapshot::GetFile(idx_t i) {
+    // TODO: profile this: we should be able to use atomics here to optimize
+    unique_lock<mutex> lck(lock);
+    return GetFileInternal(i);
 }
 
 void DeltaSnapshot::InitializeSnapshot() {
@@ -535,13 +537,17 @@ unique_ptr<MultiFileList> DeltaSnapshot::ComplexFilterPushdown(ClientContext &co
 	filtered_list->names = names;
 
 	// Copy over the snapshot, this avoids reparsing metadata
-	filtered_list->snapshot = snapshot;
+    {
+        unique_lock<mutex> lck(lock);
+        filtered_list->snapshot = snapshot;
+    }
 
 	auto &profiler = QueryProfiler::Get(context);
 
 	// Note: this is potentially quite expensive: we are creating 2 scans of the snapshot and fully materializing both
 	// file lists Therefore this is only done when profile is enabled. This is enable by default in debug mode or for
 	// EXPLAIN ANALYZE queries
+    // TODO: check locking behaviour below
 	if (profiler.IsEnabled()) {
 		Value result;
 		if (!context.TryGetCurrentSetting("delta_scan_explain_files_filtered", result)) {
@@ -589,9 +595,10 @@ unique_ptr<MultiFileList> DeltaSnapshot::ComplexFilterPushdown(ClientContext &co
 }
 
 vector<string> DeltaSnapshot::GetAllFiles() {
+    unique_lock<mutex> lck(lock);
 	idx_t i = resolved_files.size();
 	// TODO: this can probably be improved
-	while (!GetFile(i).empty()) {
+	while (!GetFileInternal(i).empty()) {
 		i++;
 	}
 	return resolved_files;
@@ -606,9 +613,9 @@ FileExpandResult DeltaSnapshot::GetExpandResult() {
 }
 
 idx_t DeltaSnapshot::GetTotalFileCount() {
-	// TODO: this can probably be improved
+    unique_lock<mutex> lck(lock);
 	idx_t i = resolved_files.size();
-	while (!GetFile(i).empty()) {
+	while (!GetFileInternal(i).empty()) {
 		i++;
 	}
 	return resolved_files.size();
@@ -617,6 +624,9 @@ idx_t DeltaSnapshot::GetTotalFileCount() {
 unique_ptr<NodeStatistics> DeltaSnapshot::GetCardinality(ClientContext &context) {
 	// This also ensures all files are expanded
 	auto total_file_count = DeltaSnapshot::GetTotalFileCount();
+
+    // TODO: internalize above
+    unique_lock<mutex> lck(lock);
 
 	if (total_file_count == 0) {
 		return make_uniq<NodeStatistics>(0, 0);
@@ -636,6 +646,17 @@ unique_ptr<NodeStatistics> DeltaSnapshot::GetCardinality(ClientContext &context)
 	}
 
 	return nullptr;
+}
+
+
+idx_t DeltaSnapshot::GetVersion() {
+    unique_lock<mutex> lck(lock);
+    return version;
+}
+
+DeltaFileMetaData &DeltaSnapshot::GetMetaData(idx_t index) const {
+    unique_lock<mutex> lck(lock);
+    return *metadata[index];
 }
 
 unique_ptr<MultiFileReader> DeltaMultiFileReader::CreateInstance(const TableFunction &table_function) {
@@ -716,16 +737,16 @@ void DeltaMultiFileReader::FinalizeBind(const MultiFileReaderOptions &file_optio
 	// Get the metadata for this file
 	D_ASSERT(global_state->file_list);
 	const auto &snapshot = dynamic_cast<const DeltaSnapshot &>(*global_state->file_list);
-	auto &file_metadata = snapshot.metadata[reader_data.file_list_idx.GetIndex()];
+    auto &file_metadata = snapshot.GetMetaData(reader_data.file_list_idx.GetIndex());
 
-	if (!file_metadata->partition_map.empty()) {
+	if (!file_metadata.partition_map.empty()) {
 		for (idx_t i = 0; i < global_column_ids.size(); i++) {
 			column_t col_id = global_column_ids[i].GetPrimaryIndex();
 			if (IsRowIdColumnId(col_id)) {
 				continue;
 			}
-			auto col_partition_entry = file_metadata->partition_map.find(global_names[col_id]);
-			if (col_partition_entry != file_metadata->partition_map.end()) {
+			auto col_partition_entry = file_metadata.partition_map.find(global_names[col_id]);
+			if (col_partition_entry != file_metadata.partition_map.end()) {
 				auto &current_type = global_types[col_id];
 				if (current_type == LogicalType::BLOB) {
 					reader_data.constant_map.emplace_back(i, Value::BLOB_RAW(col_partition_entry->second));
@@ -770,7 +791,6 @@ static SelectionVector DuckSVFromDeltaSV(const ffi::KernelBoolSlice &dv, Vector 
 	for (idx_t i = 0; i < count; i++) {
 		auto row_id = row_ids[data.sel->get_index(i)];
 
-		// TODO: why are deletion vectors not spanning whole data?
 		if (row_id >= dv.len || dv.ptr[row_id]) {
 			result.data()[current_select] = i;
 			current_select++;
@@ -977,15 +997,15 @@ void DeltaMultiFileReader::FinalizeChunk(ClientContext &context, const MultiFile
 
 	// Get the metadata for this file
 	const auto &snapshot = dynamic_cast<const DeltaSnapshot &>(*global_state->file_list);
-	auto &metadata = snapshot.metadata[reader_data.file_list_idx.GetIndex()];
+    auto &metadata = snapshot.GetMetaData(reader_data.file_list_idx.GetIndex());
 
-	if (metadata->selection_vector.ptr && chunk.size() != 0) {
+	if (metadata.selection_vector.ptr && chunk.size() != 0) {
 		D_ASSERT(delta_global_state.file_row_number_idx != DConstants::INVALID_INDEX);
 		auto &file_row_number_column = chunk.data[delta_global_state.file_row_number_idx];
 
 		// Construct the selection vector using the file_row_number column and the raw selection vector from delta
 		idx_t select_count;
-		auto sv = DuckSVFromDeltaSV(metadata->selection_vector, file_row_number_column, chunk.size(), select_count);
+	    auto sv = DuckSVFromDeltaSV(metadata.selection_vector, file_row_number_column, chunk.size(), select_count);
 		chunk.Slice(sv, select_count);
 	}
 

@@ -301,11 +301,11 @@ struct KernelUtils {
 			if (result.err._0) {
 				auto error_cast = static_cast<DuckDBEngineError *>(result.err._0);
 				error_cast->Throw(from_where);
-			} else {
-				throw IOException("Hit DeltaKernel FFI error (from: %s): Hit error, but error was nullptr",
-				                  from_where.c_str());
 			}
-		} else if (result.tag == ffi::ExternResult<T>::Tag::Ok) {
+			throw IOException("Hit DeltaKernel FFI error (from: %s): Hit error, but error was nullptr",
+				                  from_where.c_str());
+		}
+	    if (result.tag == ffi::ExternResult<T>::Tag::Ok) {
 			return result.ok._0;
 		}
 		throw IOException("Invalid error ExternResult tag found!");

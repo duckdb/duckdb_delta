@@ -43,7 +43,7 @@ struct DeltaFileMetaData {
 //! The DeltaSnapshot implements the MultiFileList API to allow injecting it into the regular DuckDB parquet scan
 struct DeltaSnapshot : public MultiFileList {
 	DeltaSnapshot(ClientContext &context, const string &path);
-	string GetPath();
+	string GetPath() const;
 	static string ToDuckDBPath(const string &raw_path);
 	static string ToDeltaPath(const string &raw_path);
 
@@ -58,12 +58,15 @@ public:
 	idx_t GetTotalFileCount() override;
 
 	unique_ptr<NodeStatistics> GetCardinality(ClientContext &context) override;
+    idx_t GetVersion();
+    DeltaFileMetaData &GetMetaData(idx_t index) const;
 
 protected:
 	//! Get the i-th expanded file
 	string GetFile(idx_t i) override;
 
 protected:
+    string GetFileInternal(idx_t i);
 	void InitializeSnapshot();
 	void InitializeScan();
 
@@ -73,8 +76,15 @@ protected:
 		    result, StringUtil::Format("While trying to read from delta table: '%s'", paths[0]));
 	}
 
-	// TODO: change back to protected
-public:
+    static void VisitData(void *engine_context, ffi::ExclusiveEngineData *engine_data,
+                       const struct ffi::KernelBoolSlice selection_vec);
+    static void VisitCallback(ffi::NullableCvoid engine_context, struct ffi::KernelStringSlice path, int64_t size,
+                           const ffi::Stats *stats, const ffi::DvInfo *dv_info,
+                           const struct ffi::CStringMap *partition_values);
+
+protected:
+    mutable mutex lock;
+
 	idx_t version;
 
 	//! Delta Kernel Structures

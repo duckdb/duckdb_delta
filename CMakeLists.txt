@@ -37,6 +37,7 @@ elseif(UNIX)
 elseif(WIN32)
   set(PLATFORM_LIBS
       ntdll
+      crypt32
       ncrypt
       secur32
       ws2_32
@@ -119,11 +120,8 @@ set(RUST_UNSET_ENV_VARS --unset=CC --unset=CXX --unset=LD)
 set(DELTA_KERNEL_LIBNAME
     "${CMAKE_STATIC_LIBRARY_PREFIX}delta_kernel_ffi${CMAKE_STATIC_LIBRARY_SUFFIX}"
 )
-set(DELTA_KERNEL_LIBPATH_DEBUG
-    "${CMAKE_BINARY_DIR}/rust/src/delta_kernel/target/${RUST_PLATFORM_TARGET}/debug/${DELTA_KERNEL_LIBNAME}"
-)
-set(DELTA_KERNEL_LIBPATH_RELEASE
-    "${CMAKE_BINARY_DIR}/rust/src/delta_kernel/target/${RUST_PLATFORM_TARGET}/release/${DELTA_KERNEL_LIBNAME}"
+set(DELTA_KERNEL_LIBPATH
+    "${CMAKE_BINARY_DIR}/rust/src/delta_kernel/target/${RUST_PLATFORM_TARGET}/$<IF:$<CONFIG:Debug>,debug,release>/${DELTA_KERNEL_LIBNAME}"
 )
 set(DELTA_KERNEL_FFI_HEADER_PATH
     "${CMAKE_BINARY_DIR}/rust/src/delta_kernel/target/ffi-headers")
@@ -142,7 +140,7 @@ ExternalProject_Add(
   # the c++ headers. Currently, when bumping the kernel version, the produced
   # header in ./src/include/delta_kernel_ffi.hpp should be also bumped, applying
   # the fix
-  GIT_TAG v0.5.0
+  GIT_TAG v0.6.0
   # Prints the env variables passed to the cargo build to the terminal, useful
   # in debugging because passing them through CMake is an error-prone mess
   CONFIGURE_COMMAND ${CMAKE_COMMAND} -E env ${RUST_UNSET_ENV_VARS}
@@ -152,19 +150,13 @@ ExternalProject_Add(
   # Build debug build
   BUILD_COMMAND
     ${CMAKE_COMMAND} -E env ${RUST_UNSET_ENV_VARS} ${RUST_ENV_VARS} cargo build
-    --package delta_kernel_ffi --workspace --all-features ${RUST_PLATFORM_PARAM}
-  # Build release build
-  COMMAND
-    ${CMAKE_COMMAND} -E env ${RUST_UNSET_ENV_VARS} ${RUST_ENV_VARS} cargo build
-    --package delta_kernel_ffi --workspace --all-features --release
-    ${RUST_PLATFORM_PARAM}
+    --package delta_kernel_ffi --workspace  $<$<CONFIG:Release>:--release> --all-features ${RUST_PLATFORM_PARAM}
   # Build DATs
   COMMAND
     ${CMAKE_COMMAND} -E env ${RUST_UNSET_ENV_VARS} ${RUST_ENV_VARS} cargo build
     --manifest-path=${CMAKE_BINARY_DIR}/rust/src/delta_kernel/acceptance/Cargo.toml
   # Define the byproducts, required for building with Ninja
-  BUILD_BYPRODUCTS "${DELTA_KERNEL_LIBPATH_DEBUG}"
-  BUILD_BYPRODUCTS "${DELTA_KERNEL_LIBPATH_RELEASE}"
+  BUILD_BYPRODUCTS "${DELTA_KERNEL_LIBPATH}"
   BUILD_BYPRODUCTS "${DELTA_KERNEL_FFI_HEADER_C}"
   BUILD_BYPRODUCTS "${DELTA_KERNEL_FFI_HEADER_CXX}"
   INSTALL_COMMAND ""
@@ -186,14 +178,12 @@ add_compile_definitions(DEFINE_DEFAULT_ENGINE)
 
 # Link delta-kernal-rs to static lib
 target_link_libraries(
-  ${EXTENSION_NAME} debug ${DELTA_KERNEL_LIBPATH_DEBUG} optimized
-  ${DELTA_KERNEL_LIBPATH_RELEASE} ${PLATFORM_LIBS})
+  ${EXTENSION_NAME} ${DELTA_KERNEL_LIBPATH} ${PLATFORM_LIBS})
 add_dependencies(${EXTENSION_NAME} delta_kernel)
 
 # Link delta-kernal-rs to dynamic lib
 target_link_libraries(
-  ${LOADABLE_EXTENSION_NAME} debug ${DELTA_KERNEL_LIBPATH_DEBUG} optimized
-  ${DELTA_KERNEL_LIBPATH_RELEASE} ${PLATFORM_LIBS})
+  ${LOADABLE_EXTENSION_NAME} ${DELTA_KERNEL_LIBPATH} ${PLATFORM_LIBS})
 add_dependencies(${LOADABLE_EXTENSION_NAME} delta_kernel)
 
 install(
