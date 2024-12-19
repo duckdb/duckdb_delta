@@ -39,7 +39,7 @@ ExpressionVisitor::VisitKernelExpression(const ffi::Handle<ffi::SharedExpression
 	visitor.make_field_list = (uintptr_t(*)(void *, uintptr_t)) & MakeFieldList;
 
 	// Templated primitive functions
-	visitor.visit_literal_bool = VisitPrimitiveLiteral<bool, Value::BOOLEAN>();
+	visitor.visit_literal_bool = VisitPrimitiveLiteralBool;
 	visitor.visit_literal_byte = VisitPrimitiveLiteralByte;
 	visitor.visit_literal_short = VisitPrimitiveLiteralShort;
 	visitor.visit_literal_int = VisitPrimitiveLiteralInt;
