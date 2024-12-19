@@ -1,0 +1,22 @@
+# name: test/sql/cloud/minio_local/gcs_r2.test
+# description: test delta extension with GCS and R2
+# group: [aws]
+
+require httpfs
+
+require parquet
+
+require delta
+
+statement ok
+CREATE SECRET (
+    TYPE GCS,
+    KEY_ID 'SOME_KEY',
+    SECRET 'SOME SECRET'
+);
+
+statement error
+select col1, col2 from delta_scan('gcs://some-bucket/some-table');
+----
+403
+
