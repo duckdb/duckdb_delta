@@ -16,6 +16,7 @@ set(EXTENSION_SOURCES
     src/delta_functions.cpp
     src/delta_utils.cpp
     src/functions/delta_scan.cpp
+    src/functions/expression_functions.cpp
     src/storage/delta_catalog.cpp
     src/storage/delta_schema_entry.cpp
     src/storage/delta_table_entry.cpp

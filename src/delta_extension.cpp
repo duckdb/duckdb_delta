@@ -44,10 +44,15 @@ public:
 };
 
 static void LoadInternal(DatabaseInstance &instance) {
-	// Load functions
-	for (const auto &function : DeltaFunctions::GetTableFunctions(instance)) {
-		ExtensionUtil::RegisterFunction(instance, function);
-	}
+    // Load Table functions
+    for (const auto &function : DeltaFunctions::GetTableFunctions(instance)) {
+        ExtensionUtil::RegisterFunction(instance, function);
+    }
+
+    // Load Scalar functions
+    for (const auto &function : DeltaFunctions::GetScalarFunctions(instance)) {
+        ExtensionUtil::RegisterFunction(instance, function);
+    }
 
 	// Register the "single table" delta catalog (to ATTACH a single delta table)
 	auto &config = DBConfig::GetConfig(instance);
