@@ -44,8 +44,13 @@ public:
 };
 
 static void LoadInternal(DatabaseInstance &instance) {
-	// Load functions
+	// Load Table functions
 	for (const auto &function : DeltaFunctions::GetTableFunctions(instance)) {
+		ExtensionUtil::RegisterFunction(instance, function);
+	}
+
+	// Load Scalar functions
+	for (const auto &function : DeltaFunctions::GetScalarFunctions(instance)) {
 		ExtensionUtil::RegisterFunction(instance, function);
 	}
 
