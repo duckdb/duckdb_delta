@@ -15,12 +15,11 @@ vector<TableFunctionSet> DeltaFunctions::GetTableFunctions(DatabaseInstance &ins
 }
 
 vector<ScalarFunctionSet> DeltaFunctions::GetScalarFunctions(DatabaseInstance &instance) {
-    vector<ScalarFunctionSet> functions;
+	vector<ScalarFunctionSet> functions;
 
-    functions.push_back(GetExpressionFunction(instance));
+	functions.push_back(GetExpressionFunction(instance));
 
-    return functions;
+	return functions;
 }
 
-
-};
+}; // namespace duckdb

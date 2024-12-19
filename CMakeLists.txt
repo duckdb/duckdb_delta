@@ -150,7 +150,8 @@ ExternalProject_Add(
   # Build debug build
   BUILD_COMMAND
     ${CMAKE_COMMAND} -E env ${RUST_UNSET_ENV_VARS} ${RUST_ENV_VARS} cargo build
-    --package delta_kernel_ffi --workspace  $<$<CONFIG:Release>:--release> --all-features ${RUST_PLATFORM_PARAM}
+    --package delta_kernel_ffi --workspace $<$<CONFIG:Release>:--release>
+    --all-features ${RUST_PLATFORM_PARAM}
   # Build DATs
   COMMAND
     ${CMAKE_COMMAND} -E env ${RUST_UNSET_ENV_VARS} ${RUST_ENV_VARS} cargo build
@@ -177,13 +178,13 @@ set(CMAKE_OSX_DEPLOYMENT_TARGET
 add_compile_definitions(DEFINE_DEFAULT_ENGINE)
 
 # Link delta-kernal-rs to static lib
-target_link_libraries(
-  ${EXTENSION_NAME} ${DELTA_KERNEL_LIBPATH} ${PLATFORM_LIBS})
+target_link_libraries(${EXTENSION_NAME} ${DELTA_KERNEL_LIBPATH}
+                      ${PLATFORM_LIBS})
 add_dependencies(${EXTENSION_NAME} delta_kernel)
 
 # Link delta-kernal-rs to dynamic lib
-target_link_libraries(
-  ${LOADABLE_EXTENSION_NAME} ${DELTA_KERNEL_LIBPATH} ${PLATFORM_LIBS})
+target_link_libraries(${LOADABLE_EXTENSION_NAME} ${DELTA_KERNEL_LIBPATH}
+                      ${PLATFORM_LIBS})
 add_dependencies(${LOADABLE_EXTENSION_NAME} delta_kernel)
 
 install(
