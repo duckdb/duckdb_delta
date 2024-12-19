@@ -36,6 +36,7 @@ elseif(UNIX)
 elseif(WIN32)
   set(PLATFORM_LIBS
       ntdll
+      crypt32
       ncrypt
       secur32
       ws2_32
