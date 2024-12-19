@@ -241,42 +241,41 @@ static ffi::EngineBuilder *CreateBuilder(ClientContext &context, const string &p
 	// Here you would need to add the logic for setting the builder options for Azure
 	// This is just a placeholder and will need to be replaced with the actual logic
 	if (secret_type == "s3" || secret_type == "gcs" || secret_type == "r2") {
+	    string key_id, secret, session_token, region, endpoint, url_style;
+	    bool use_ssl = true;
+	    secret_reader.TryGetSecretKey("key_id", key_id);
+	    secret_reader.TryGetSecretKey("secret", secret);
+	    secret_reader.TryGetSecretKey("session_token", session_token);
+	    secret_reader.TryGetSecretKey("region", region);
+	    secret_reader.TryGetSecretKey("endpoint", endpoint);
+	    secret_reader.TryGetSecretKey("url_style", url_style);
+	    secret_reader.TryGetSecretKey("use_ssl", use_ssl);
 
-		string key_id, secret, session_token, region, endpoint, url_style;
-		bool use_ssl = true;
-		secret_reader.TryGetSecretKey("key_id", key_id);
-		secret_reader.TryGetSecretKey("secret", secret);
-		secret_reader.TryGetSecretKey("session_token", session_token);
-		secret_reader.TryGetSecretKey("region", region);
-		secret_reader.TryGetSecretKey("endpoint", endpoint);
-		secret_reader.TryGetSecretKey("url_style", url_style);
-		secret_reader.TryGetSecretKey("use_ssl", use_ssl);
+	    if (key_id.empty() && secret.empty()) {
+	        ffi::set_builder_option(builder, KernelUtils::ToDeltaString("skip_signature"),
+                                    KernelUtils::ToDeltaString("true"));
+	    }
 
-		if (key_id.empty() && secret.empty()) {
-			ffi::set_builder_option(builder, KernelUtils::ToDeltaString("skip_signature"),
-			                        KernelUtils::ToDeltaString("true"));
-		}
-
-		if (!key_id.empty()) {
-			ffi::set_builder_option(builder, KernelUtils::ToDeltaString("aws_access_key_id"),
-			                        KernelUtils::ToDeltaString(key_id));
-		}
-		if (!secret.empty()) {
-			ffi::set_builder_option(builder, KernelUtils::ToDeltaString("aws_secret_access_key"),
-			                        KernelUtils::ToDeltaString(secret));
-		}
-		if (!session_token.empty()) {
-			ffi::set_builder_option(builder, KernelUtils::ToDeltaString("aws_session_token"),
-			                        KernelUtils::ToDeltaString(session_token));
-		}
-		if (!endpoint.empty() && endpoint != "s3.amazonaws.com") {
-			if (!StringUtil::StartsWith(endpoint, "https://") && !StringUtil::StartsWith(endpoint, "http://")) {
-				if (use_ssl) {
-					endpoint = "https://" + endpoint;
-				} else {
-					endpoint = "http://" + endpoint;
-				}
-			}
+	    if (!key_id.empty()) {
+	        ffi::set_builder_option(builder, KernelUtils::ToDeltaString("aws_access_key_id"),
+                                    KernelUtils::ToDeltaString(key_id));
+	    }
+	    if (!secret.empty()) {
+	        ffi::set_builder_option(builder, KernelUtils::ToDeltaString("aws_secret_access_key"),
+                                    KernelUtils::ToDeltaString(secret));
+	    }
+	    if (!session_token.empty()) {
+	        ffi::set_builder_option(builder, KernelUtils::ToDeltaString("aws_session_token"),
+                                    KernelUtils::ToDeltaString(session_token));
+	    }
+	    if (!endpoint.empty() && endpoint != "s3.amazonaws.com") {
+	        if (!StringUtil::StartsWith(endpoint, "https://") && !StringUtil::StartsWith(endpoint, "http://")) {
+	            if (use_ssl) {
+	                endpoint = "https://" + endpoint;
+	            } else {
+	                endpoint = "http://" + endpoint;
+	            }
+	        }
 
 	        if (StringUtil::StartsWith(endpoint, "http://")) {
 	            ffi::set_builder_option(builder, KernelUtils::ToDeltaString("allow_http"),
