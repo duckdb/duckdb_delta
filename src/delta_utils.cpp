@@ -79,18 +79,15 @@ uintptr_t SchemaVisitor::MakeFieldListImpl(uintptr_t capacity_hint) {
 void SchemaVisitor::AppendToList(uintptr_t id, ffi::KernelStringSlice name, LogicalType &&child) {
 	auto it = inflight_lists.find(id);
 	if (it == inflight_lists.end()) {
-		// TODO... some error...
-		throw InternalException("WEIRD SHIT");
-	} else {
-		it->second->emplace_back(std::make_pair(string(name.ptr, name.len), std::move(child)));
+		throw InternalException("Unhandled error in SchemaVisitor::AppendToList child");
 	}
+	it->second->emplace_back(std::make_pair(string(name.ptr, name.len), std::move(child)));
 }
 
 unique_ptr<SchemaVisitor::FieldList> SchemaVisitor::TakeFieldList(uintptr_t id) {
 	auto it = inflight_lists.find(id);
 	if (it == inflight_lists.end()) {
-		// TODO: Raise some kind of error.
-		throw InternalException("WEIRD SHIT 2");
+		throw InternalException("Unhandled error in SchemaVisitor::TakeFieldList");
 	}
 	auto rval = std::move(it->second);
 	inflight_lists.erase(it);
@@ -145,10 +142,12 @@ string DuckDBEngineError::KernelErrorEnumToString(ffi::KernelError err) {
         "MissingCommitInfo",
         "UnsupportedError",
         "ParseIntervalError",
-        "ChangeDataFeedUnsupported"
+        "ChangeDataFeedUnsupported",
+	    "ChangeDataFeedIncompatibleSchema",
+        "InvalidCheckpoint"
 	};
 
-	static_assert(sizeof(KERNEL_ERROR_ENUM_STRINGS) / sizeof(char *) - 1 == (int)ffi::KernelError::ChangeDataFeedUnsupported,
+	static_assert(sizeof(KERNEL_ERROR_ENUM_STRINGS) / sizeof(char *) - 1 == (int)ffi::KernelError::InvalidCheckpoint,
 	              "KernelErrorEnumStrings mismatched with kernel");
 
 	if ((int)err < sizeof(KERNEL_ERROR_ENUM_STRINGS) / sizeof(char *)) {

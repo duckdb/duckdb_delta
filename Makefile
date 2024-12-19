@@ -20,7 +20,7 @@ test_debug: export DELTA_KERNEL_TESTS_PATH=./build/debug/rust/src/delta_kernel/k
 test_debug: export DAT_PATH=./build/debug/rust/src/delta_kernel/acceptance/tests/dat
 
 # Core extensions that we need for testing
-CORE_EXTENSIONS='tpcds;tpch;aws;azure;httpfs'
+#CORE_EXTENSIONS='tpcds;tpch;aws;azure;httpfs'
 
 # Set this flag during building to enable the benchmark runner
 ifeq (${BUILD_BENCHMARK}, 1)
