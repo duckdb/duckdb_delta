@@ -64,12 +64,12 @@ optional_idx DeltaCatalog::GetCatalogVersion(ClientContext &context) {
 	// Option 1: snapshot is cached table-wide
 	auto cached_snapshot = main_schema->GetCachedTable();
 	if (cached_snapshot) {
-		return cached_snapshot->snapshot->version;
+		return cached_snapshot->snapshot->GetVersion();
 	}
 
 	// Option 2: snapshot is cached in transaction
 	if (delta_transaction.table_entry) {
-		return delta_transaction.table_entry->snapshot->version;
+		return delta_transaction.table_entry->snapshot->GetVersion();
 	}
 
 	return {};
