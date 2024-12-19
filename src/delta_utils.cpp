@@ -145,10 +145,12 @@ string DuckDBEngineError::KernelErrorEnumToString(ffi::KernelError err) {
         "MissingCommitInfo",
         "UnsupportedError",
         "ParseIntervalError",
-        "ChangeDataFeedUnsupported"
+        "ChangeDataFeedUnsupported",
+	    "ChangeDataFeedIncompatibleSchema",
+        "InvalidCheckpoint"
 	};
 
-	static_assert(sizeof(KERNEL_ERROR_ENUM_STRINGS) / sizeof(char *) - 1 == (int)ffi::KernelError::ChangeDataFeedUnsupported,
+	static_assert(sizeof(KERNEL_ERROR_ENUM_STRINGS) / sizeof(char *) - 1 == (int)ffi::KernelError::InvalidCheckpoint,
 	              "KernelErrorEnumStrings mismatched with kernel");
 
 	if ((int)err < sizeof(KERNEL_ERROR_ENUM_STRINGS) / sizeof(char *)) {
