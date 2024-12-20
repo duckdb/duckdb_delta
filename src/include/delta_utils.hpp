@@ -4,13 +4,129 @@
 #include "duckdb/common/enum_util.hpp"
 #include "duckdb/planner/filter/conjunction_filter.hpp"
 #include "duckdb/planner/filter/constant_filter.hpp"
-
+#include "duckdb/planner/expression.hpp"
+#include "duckdb/parser/expression/constant_expression.hpp"
+#include "duckdb/parser/expression/conjunction_expression.hpp"
+#include "duckdb/common/error_data.hpp"
+#include "duckdb/parser/expression/comparison_expression.hpp"
 #include <duckdb/planner/filter/null_filter.hpp>
 #include <iostream>
 
 // TODO: clean up this file as we go
 
 namespace duckdb {
+
+class ExpressionVisitor : public ffi::EngineExpressionVisitor {
+	using FieldList = vector<unique_ptr<ParsedExpression>>;
+
+public:
+	unique_ptr<vector<unique_ptr<ParsedExpression>>>
+	VisitKernelExpression(const ffi::Handle<ffi::SharedExpression> *expression);
+
+private:
+	unordered_map<uintptr_t, unique_ptr<FieldList>> inflight_lists;
+	uintptr_t next_id = 1;
+
+	ErrorData error;
+
+	// Literals
+	template <typename CPP_TYPE, Value (*CREATE_VALUE_FUN)(CPP_TYPE)>
+	static ffi::VisitLiteralFn<CPP_TYPE> VisitPrimitiveLiteral() {
+		return (ffi::VisitLiteralFn<CPP_TYPE>)&VisitPrimitiveLiteral<CPP_TYPE, CREATE_VALUE_FUN>;
+	}
+	template <typename CPP_TYPE, typename CREATE_VALUE_FUN>
+	static void VisitPrimitiveLiteral(void *state, uintptr_t sibling_list_id, CPP_TYPE value) {
+		auto state_cast = static_cast<ExpressionVisitor *>(state);
+		auto duckdb_value = CREATE_VALUE_FUN(value);
+		auto expression = make_uniq<ConstantExpression>(duckdb_value);
+		state_cast->AppendToList(sibling_list_id, std::move(expression));
+	}
+
+	static void VisitPrimitiveLiteralBool(void *state, uintptr_t sibling_list_id, bool value);
+	static void VisitPrimitiveLiteralByte(void *state, uintptr_t sibling_list_id, int8_t value);
+	static void VisitPrimitiveLiteralShort(void *state, uintptr_t sibling_list_id, int16_t value);
+	static void VisitPrimitiveLiteralInt(void *state, uintptr_t sibling_list_id, int32_t value);
+	static void VisitPrimitiveLiteralLong(void *state, uintptr_t sibling_list_id, int64_t value);
+	static void VisitPrimitiveLiteralFloat(void *state, uintptr_t sibling_list_id, float value);
+	static void VisitPrimitiveLiteralDouble(void *state, uintptr_t sibling_list_id, double value);
+
+	static void VisitTimestampLiteral(void *state, uintptr_t sibling_list_id, int64_t value);
+	static void VisitTimestampNtzLiteral(void *state, uintptr_t sibling_list_id, int64_t value);
+	static void VisitDateLiteral(void *state, uintptr_t sibling_list_id, int32_t value);
+	static void VisitStringLiteral(void *state, uintptr_t sibling_list_id, ffi::KernelStringSlice value);
+	static void VisitBinaryLiteral(void *state, uintptr_t sibling_list_id, const uint8_t *buffer, uintptr_t len);
+	static void VisitNullLiteral(void *state, uintptr_t sibling_list_id);
+	static void VisitArrayLiteral(void *state, uintptr_t sibling_list_id, uintptr_t child_id);
+	static void VisitStructLiteral(void *data, uintptr_t sibling_list_id, uintptr_t child_field_list_value,
+	                               uintptr_t child_value_list_id);
+	static void VisitDecimalLiteral(void *state, uintptr_t sibling_list_id, uint64_t value_ms, uint64_t value_ls,
+	                                uint8_t precision, uint8_t scale);
+	static void VisitColumnExpression(void *state, uintptr_t sibling_list_id, ffi::KernelStringSlice name);
+	static void VisitStructExpression(void *state, uintptr_t sibling_list_id, uintptr_t child_list_id);
+	static void VisitNotExpression(void *state, uintptr_t sibling_list_id, uintptr_t child_list_id);
+	static void VisitIsNullExpression(void *state, uintptr_t sibling_list_id, uintptr_t child_list_id);
+
+	template <ExpressionType EXPRESSION_TYPE, typename EXPRESSION_TYPENAME>
+	static ffi::VisitVariadicFn VisitUnaryExpression() {
+		return &VisitVariadicExpression<EXPRESSION_TYPE, EXPRESSION_TYPENAME>;
+	}
+	template <ExpressionType EXPRESSION_TYPE, typename EXPRESSION_TYPENAME>
+	static ffi::VisitVariadicFn VisitBinaryExpression() {
+		return &VisitBinaryExpression<EXPRESSION_TYPE, EXPRESSION_TYPENAME>;
+	}
+	template <ExpressionType EXPRESSION_TYPE, typename EXPRESSION_TYPENAME>
+	static ffi::VisitVariadicFn VisitVariadicExpression() {
+		return &VisitVariadicExpression<EXPRESSION_TYPE, EXPRESSION_TYPENAME>;
+	}
+
+	template <ExpressionType EXPRESSION_TYPE, typename EXPRESSION_TYPENAME>
+	static void VisitVariadicExpression(void *state, uintptr_t sibling_list_id, uintptr_t child_list_id) {
+		auto state_cast = static_cast<ExpressionVisitor *>(state);
+		auto children = state_cast->TakeFieldList(child_list_id);
+		if (!children) {
+			state_cast->AppendToList(sibling_list_id, std::move(make_uniq<ConstantExpression>(Value(42))));
+			return;
+		}
+		unique_ptr<ParsedExpression> expression = make_uniq<EXPRESSION_TYPENAME>(EXPRESSION_TYPE, std::move(*children));
+		state_cast->AppendToList(sibling_list_id, std::move(expression));
+	}
+
+	static void VisitAdditionExpression(void *state, uintptr_t sibling_list_id, uintptr_t child_list_id);
+	static void VisitSubctractionExpression(void *state, uintptr_t sibling_list_id, uintptr_t child_list_id);
+	static void VisitDivideExpression(void *state, uintptr_t sibling_list_id, uintptr_t child_list_id);
+	static void VisitMultiplyExpression(void *state, uintptr_t sibling_list_id, uintptr_t child_list_id);
+
+	template <ExpressionType EXPRESSION_TYPE, typename EXPRESSION_TYPENAME>
+	static void VisitBinaryExpression(void *state, uintptr_t sibling_list_id, uintptr_t child_list_id) {
+		auto state_cast = static_cast<ExpressionVisitor *>(state);
+		auto children = state_cast->TakeFieldList(child_list_id);
+		if (!children) {
+			state_cast->AppendToList(sibling_list_id, std::move(make_uniq<ConstantExpression>(Value(42))));
+			return;
+		}
+
+		if (children->size() != 2) {
+			state_cast->AppendToList(sibling_list_id, std::move(make_uniq<ConstantExpression>(Value(42))));
+			state_cast->error =
+			    ErrorData("INCORRECT SIZE IN VISIT_BINARY_EXPRESSION" + EnumUtil::ToString(EXPRESSION_TYPE));
+			return;
+		}
+
+		auto &lhs = children->at(0);
+		auto &rhs = children->at(1);
+		unique_ptr<ParsedExpression> expression =
+		    make_uniq<EXPRESSION_TYPENAME>(EXPRESSION_TYPE, std::move(lhs), std::move(rhs));
+		state_cast->AppendToList(sibling_list_id, std::move(expression));
+	}
+
+	static void VisitComparisonExpression(void *state, uintptr_t sibling_list_id, uintptr_t child_list_id);
+
+	// List functions
+	static uintptr_t MakeFieldList(ExpressionVisitor *state, uintptr_t capacity_hint);
+	void AppendToList(uintptr_t id, unique_ptr<ParsedExpression> child);
+	uintptr_t MakeFieldListImpl(uintptr_t capacity_hint);
+	unique_ptr<FieldList> TakeFieldList(uintptr_t id);
+};
 
 // SchemaVisitor is used to parse the schema of a Delta table from the Kernel
 class SchemaVisitor {
@@ -191,9 +307,9 @@ struct KernelUtils {
 				error_cast->Throw(from_where);
 			}
 			throw IOException("Hit DeltaKernel FFI error (from: %s): Hit error, but error was nullptr",
-				                  from_where.c_str());
+			                  from_where.c_str());
 		}
-	    if (result.tag == ffi::ExternResult<T>::Tag::Ok) {
+		if (result.tag == ffi::ExternResult<T>::Tag::Ok) {
 			return result.ok._0;
 		}
 		throw IOException("Invalid error ExternResult tag found!");

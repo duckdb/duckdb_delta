@@ -1,0 +1,50 @@
+# name: test/sql/main/test_expression.test
+# description: Test the get_delta_test_expression function
+# group: [delta_generated]
+
+require parquet
+
+require delta
+
+# TODO still broken:
+# - Decimal
+# - StructExpression
+query I
+SELECT unnest(get_delta_test_expression())
+----
+127
+-128
+3.4028235e+38
+-3.4028235e+38
+1.7976931348623157e+308
+-1.7976931348623157e+308
+2147483647
+-2147483648
+9223372036854775807
+-9223372036854775808
+'hello expressions'
+true
+false
+'1970-01-01 00:00:00.00005+00'::TIMESTAMP WITH TIME ZONE
+'1970-01-01 00:00:00.0001'::TIMESTAMP
+'1970-02-02'::DATE
+'\x00\x00\xDE\xAD\xBE\xEF\xCA\xFE'::BLOB
+0.0000000042
+NULL
+struct_pack("'top'" := struct_pack("'a'" := 500, "'b'" := list_value(5, 0)))
+list_value(5, 0)
+42
+not((col is NULL))
+(0 IN (0))
+(0 + 0)
+(0 - 0)
+(0 = 0)
+(0 != 0)
+(0 NOT IN (0))
+(0 / 0)
+(0 * 0)
+(0 < 0)
+(0 <= 0)
+(0 > 0)
+(0 >= 0)
+(0 IS DISTINCT FROM 0)
