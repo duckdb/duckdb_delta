@@ -60,19 +60,24 @@ bool DeltaCatalog::UseCachedSnapshot() {
 
 optional_idx DeltaCatalog::GetCatalogVersion(ClientContext &context) {
 	auto &delta_transaction = DeltaTransaction::Get(context, *this);
+    idx_t version = DConstants::INVALID_INDEX;
 
 	// Option 1: snapshot is cached table-wide
 	auto cached_snapshot = main_schema->GetCachedTable();
 	if (cached_snapshot) {
-		return cached_snapshot->snapshot->GetVersion();
+	    version = cached_snapshot->snapshot->GetVersion();
 	}
 
 	// Option 2: snapshot is cached in transaction
 	if (delta_transaction.table_entry) {
-		return delta_transaction.table_entry->snapshot->GetVersion();
+	    version = delta_transaction.table_entry->snapshot->GetVersion();
 	}
 
-	return {};
+    if (version != DConstants::INVALID_INDEX) {
+        return version;
+    }
+
+	return optional_idx::Invalid();
 }
 
 DatabaseSize DeltaCatalog::GetDatabaseSize(ClientContext &context) {
